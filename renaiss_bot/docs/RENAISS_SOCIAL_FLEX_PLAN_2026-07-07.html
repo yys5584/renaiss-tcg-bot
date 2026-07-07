@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>르네이스 봇 자랑·소셜 게임 기획서 (2026-07-07)</title>
+<style>
+  body { font-family: 'Pretendard', 'Malgun Gothic', sans-serif; max-width: 860px; margin: 40px auto; padding: 0 24px; line-height: 1.75; color: #2b2b2b; background: #faf8f4; }
+  h1 { font-size: 26px; border-bottom: 3px solid #e8b849; padding-bottom: 12px; }
+  h2 { font-size: 20px; margin-top: 44px; color: #1a1a1a; border-left: 5px solid #e8b849; padding-left: 12px; }
+  h3 { font-size: 16px; margin-top: 28px; }
+  .meta { color: #888; font-size: 13px; }
+  .box { background: #fff; border: 1px solid #e5ddca; border-radius: 10px; padding: 18px 22px; margin: 16px 0; }
+  .verdict { background: #fdf3d7; border: 1px solid #e8b849; border-radius: 10px; padding: 16px 20px; margin: 16px 0; font-weight: 600; }
+  .critique { border-left: 4px solid #d9534f; background: #fdf0ef; padding: 10px 16px; margin: 10px 0; border-radius: 0 8px 8px 0; }
+  .rebuttal { border-left: 4px solid #4a90d9; background: #eef4fb; padding: 10px 16px; margin: 10px 0; border-radius: 0 8px 8px 0; }
+  .critique b, .rebuttal b { display: block; font-size: 13px; margin-bottom: 4px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 14px; background: #fff; }
+  th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+  th { background: #f3ecd9; }
+  a { color: #b07d10; }
+  .drop { color: #999; text-decoration: line-through; }
+  .small { font-size: 13px; color: #777; }
+</style>
+</head>
+<body>
+
+<h1>르네이스 봇 — 자랑·소셜 게임 기획서</h1>
+<p class="meta">2026-07-07 · 리서치 기반 (영어권 6소스 + 한국 커뮤니티 5소스, 2025~2026 자료) · 개발 디테일 제외</p>
+
+<div class="verdict">
+한 줄 결론: 자랑의 단위를 <u>"내 재산"이 아니라 "내 운과 안목"</u>으로 잡는다.<br>
+그리고 우리의 무기는 하나다 — <u>봇이 계산하니까 조작이 불가능한 자랑</u>. 코인판 인증 문화가 못 푼 문제를 우리는 구조로 푼다.
+</div>
+
+<h2>1. 리서치에서 뭘 배웠나 (핵심 5개)</h2>
+
+<div class="box">
+<b>① 사람들은 "총자산"이 아니라 "방금 이 순간"을 자랑한다.</b><br>
+Reddit TCG 커뮤니티에서 제일 반응 좋은 글은 "메일 데이"(오늘 도착한 카드 개봉) 포스트고, 코인판에서 바이럴 되는 건 리더보드가 아니라 예쁘게 꾸민 PnL 카드 한 장이다. 정적인 순위표보다 "지금 이거 뽑았다!"가 훨씬 세다.
+<span class="small">(<a href="https://www.wargamer.com/pokemon-trading-card-game/scalper-versus-reseller">Wargamer</a>, <a href="https://parthsamin.medium.com/the-10-000-screenshot-why-crypto-trading-has-a-trust-problem-and-how-we-can-fix-it-24beef2309e1">The $10,000 Screenshot</a>)</span>
+</div>
+
+<div class="box">
+<b>② 인증 문화의 아킬레스건은 "조작 의심" — 우리는 구조적으로 면역이다.</b><br>
+코인판 최대 인증(워뇨띠 1조)은 조작으로 판명됐고, "대박 나면 나눠준다"는 구제 릴레이는 기자가 직접 실험해보니 받은 사람이 없었다. 스크린샷은 초 단위로 조작 가능한 시대다. 우리 봇의 포트폴리오·뽑기 결과는 서버가 직접 계산해서 그려주니까 <b>애초에 거짓말이 불가능한 자랑</b>이다. 이게 우리의 가장 큰 차별점.
+<span class="small">(<a href="https://namu.wiki/w/%EC%9B%8C%EB%87%A8%EB%9D%A0">워뇨띠 조작 논란</a>, <a href="https://www.ilyo.co.kr/?ac=article_view&amp;entry_id=287125">일요신문 구제 릴레이 실험</a>)</span>
+</div>
+
+<div class="box">
+<b>③ 시세를 앞세우면 "시세충/돈독" 낙인이 붙는다.</b><br>
+포켓몬카드판(한국·해외 공통)엔 리셀러·투기꾼 반감이 뿌리 깊다. 디스코드에서 리셀 부업 언급만으로 밴당한 사례도 있다. 다만 커뮤니티가 진짜 싫어하는 건 "남의 기회를 뺏어 돈 버는 것"이지 시세 얘기 자체가 아니다. <b>우리는 전부 무료 수집이라 "돈 안 쓰고 컬렉션 플렉스"라는, 낙인을 우회하는 유일한 포지션이 가능하다.</b>
+<span class="small">(<a href="https://www.cnbc.com/2026/05/22/pokemon-cards-crypto-market-resale-logan-paul.html">CNBC</a>, <a href="https://namu.wiki/w/%ED%8F%AC%EC%BC%93%EB%AA%AC%20%EC%B9%B4%EB%93%9C%20%EA%B2%8C%EC%9E%84%20%EB%A7%88%EC%9D%B4%EB%84%88%20%EA%B0%A4%EB%9F%AC%EB%A6%AC">디시 포켓몬카드 갤러리 문화</a>)</span>
+</div>
+
+<div class="box">
+<b>④ 줄세우기 랭킹은 다수를 지치게 한다. Karuta의 3대 독성 = 희소성·고래·노가다.</b><br>
+디스코드 카드봇 Karuta는 채팅→드롭 루프로 흥했지만(우리 ㅌ/ㅊ와 같은 철학), 유니크 카드 희소성 경쟁 때문에 고래가 신규를 착취하는 살벌한 분위기가 됐다. 반면 Mudae는 중복 획득을 허용해서 커뮤니티가 훨씬 우호적이다. 한국에서도 "랭크전 지쳐서 게임 접었다"는 후기가 광범위하다.
+<span class="small">(<a href="https://blog.communityone.io/karuta-part-2-nfts-monetization-and-community-dynamics-lessons-for-developers/">Karuta 케이스 스터디</a>, <a href="https://namu.wiki/w/%EB%93%B1%EA%B8%89%EC%A0%84">등급전 피로</a>)</span>
+</div>
+
+<div class="box">
+<b>⑤ 데일리 퀴즈의 성공 공식은 Wordle 3원칙 — 짧게, 하루 1판, 공유 가능.</b><br>
+Costcodle(코스트코 가격 맞추기), Stockle 등 가격 맞추기 게임은 이미 검증된 장르다. 성공작의 공통점: 5분 안에 끝나고, 하루 1판이고, 결과를 이모지 그리드로 공유할 수 있다. 무한 플레이를 붙이는 순간 데일리 리추얼이 깨지며 망한다. 한국에서도 "이거 얼마게?"는 침착맨 코너가 될 만큼 대중 검증된 포맷.
+<span class="small">(<a href="https://costcodle.com/">Costcodle</a>, <a href="https://thinkygames.com/features/tired-of-wordle-and-connections-try-these-6-fun-daily-puzzle-games-that-will-get-you-thinking/">Wordle 3원칙 분석</a>, <a href="https://machugi.io/quiz/JHIhp5DKJ8VRvFANbplm">마추기</a>)</span>
+</div>
+
+<h2>2. TGPoke 철학과 부딪혀보기</h2>
+<p>TGPoke 게임 철학의 핵심은 "자랑·꺼드럭이 가장 중요하다", "채팅방이 무대다", "고인물-뉴비 격차 금지", "단순함이 생명"이다. 르네이스는 시세가 콘텐츠인 봇이라 TGPoke와 정반대로 보이지만, 리서치를 거치니 결론이 하나로 모인다:</p>
+<div class="verdict">
+시세는 재료일 뿐, 자랑거리는 "운과 안목"이어야 한다.<br>
+"내 포트폴리오 $3,000"(재산 자랑)은 낙인+피로를 부르고, "무료팩에서 $390짜리를 뽑아버림 ㅋㅋ"(운 자랑)과 "시세 퀴즈 12일 연속 정답"(안목 자랑)은 모두가 축하해준다. 돈은 있는데 낭만으로 포장하는 것 — 이게 TGPoke의 "억대 자산가가 피카피카 치는 낭만"과 같은 문법이다.
+</div>
+
+<h2>3. 기능 제안 (비판 → 반박 → 확정안)</h2>
+
+<h3>제안 A. 플렉스 카드 — "메일 데이"를 봇으로 재현 ⭐ 최우선</h3>
+<p>방금 뽑은 카드(또는 내 대표 카드)를 봇이 예쁜 공유 카드 이미지로 만들어 그룹에 게시. 카드에는 시세 + <b>운 요소</b>가 함께 박힌다: "몇 팩 만에 나왔는지", "이 등급이 나올 확률", "뽑은 날짜". 방 사람들이 이모지 반응을 남기면 자랑한 사람과 반응한 사람 모두 소소한 보상.</p>
+<div class="critique"><b>비판</b>TCG 커뮤니티가 제일 싫어하는 게 "알맹이 없는 자랑 도배"다. 그리고 2025년 이후 크립토판은 무지성 PnL 자랑에 피로감이 커졌다. 자랑 버튼을 주면 도배와 피로로 돌아올 수 있다.</div>
+<div class="rebuttal"><b>반박 → 설계로 해결</b>① 하루 1회 제한(도배 원천 차단). ② 자랑 카드에 "얼마"만 있는 게 아니라 확률·팩 수 같은 스토리가 자동으로 붙는다 — "돈 자랑"이 아니라 "이 운 봐라"로 톤이 바뀐다. ③ 반응한 사람도 보상을 받으니 자랑이 시비가 아니라 다 같이 버튼 누르는 놀이가 된다.</div>
+
+<h3>제안 B. 퀴즈 스트릭 + 공유 그리드 — 이미 있는 퀴즈에 Wordle 문법 입히기 ⭐ 최우선</h3>
+<p>데일리 시세 퀴즈(오늘 밤 첫 회)에 연속 정답 스트릭을 붙이고, 결과를 Wordle처럼 이모지 그리드로 만들어준다: <b>🎯 Price Quiz #23 — ✅ 정답! 🔥 7일 연속</b>. 스트릭이 길수록 정답 공개 메시지에서 이름이 위에 뜬다. 주간 순위는 이미 있으니, 여기에 "안목 자랑"의 서사가 얹히는 것.</p>
+<div class="critique"><b>비판</b>스트릭은 하루 놓치면 끊긴다. "매일 21시에 접속 안 하면 깨지는 숙제"가 되는 순간, 재미가 의무로 변한다 — TGPoke 철학의 "안 해도 재밌어야 한다" 위반.</div>
+<div class="rebuttal"><b>반박 → 설계로 해결</b>스트릭이 끊겨도 잃는 건 없다(보상은 매일 독립). 스트릭은 순전히 명예 뱃지다. 그리고 "주 5일 정답" 같은 느슨한 위클리 개념을 함께 두면 하루 빠져도 복구된다. 놓친 벌은 없고 이어간 자랑만 있게.</div>
+
+<h3>제안 C. 이번 주 최고의 한 장 (Best Mover) — 랭킹의 재설계</h3>
+<p>매주 일요일, 봇이 자동으로 "이번 주 이 방에서 가장 시세가 많이 오른 카드"의 주인을 발표한다. 총자산 순위가 아니라 <b>카드 한 장의 상승률</b>이라, 어제 가입한 뉴비도 카드 한 장만 좋으면 1등이 된다.</p>
+<div class="critique"><b>비판</b>어차피 운이다. 그리고 베타 시세 API의 노이즈(갑자기 튀는 가격)가 1등을 정할 수도 있다. "시세 변동"을 매주 전면에 노출하면 투기판 감성이 스며든다.</div>
+<div class="rebuttal"><b>반박 → 일부 수용</b>운인 게 맞고, 그래서 격차가 안 생긴다(마리오카트 원리). 시세 노이즈는 실재하는 리스크라 "일정 신뢰도 이상 가격만 집계" 같은 방어가 필요하다. 투기 감성 우려는 문구로 관리 — "가장 많이 번 사람"이 아니라 "이번 주 가장 반짝인 카드"로 부른다. 주 1회 한 줄이라 도배도 아니다.</div>
+
+<h3>제안 D. 잭팟 나눔 — 구제 릴레이를 "진짜로 주는" 구조로</h3>
+<p>퀴즈 잭팟(프리미엄팩)이 터진 사람에게 나눔 버튼을 준다. 누르면 그 방 전원이 보너스 프리팩을 받고, 나눈 사람은 명예 타이틀 + 추가 보상. 코인판 구제 릴레이의 폭발적 참여력을 가져오되, 봇이 지급하니까 "받은 사람 없는 놀이"라는 냉소가 원천 차단된다.</p>
+<div class="critique"><b>비판</b>보상 인플레가 우려된다. 그리고 안 누르면? "쟤 나눔 안 함"이라는 눈치가 생기면 잭팟이 기쁨이 아니라 부담이 된다.</div>
+<div class="rebuttal"><b>반박 → 보류 판단</b>인플레는 수량 조절로 잡을 수 있지만, "안 나누면 눈치" 문제는 설계로 완전히 못 지운다. TGPoke의 티배깅 혐오 원칙(기분 나쁜 순간 만들지 않기)에 걸릴 수 있어서, A·B·C가 자리 잡은 뒤 방 분위기를 보고 결정하는 게 맞다. <b>지금은 후순위.</b></div>
+
+<h3>버린 아이디어 (반박당해서 탈락)</h3>
+<table>
+<tr><th>아이디어</th><th>탈락 사유</th></tr>
+<tr><td class="drop">총자산 상시 리더보드 강화</td><td>고래 고정 1등 → 다수가 지침. Karuta·한국 랭크전 피로 사례 모두 경고. 지금 있는 /rank 정도로 충분.</td></tr>
+<tr><td class="drop">유저 간 카드 실거래 마켓</td><td>Karuta의 "고래가 신규에게 바가지" 착취 구조 + 베타 시세로 가격 시비 → 커뮤니티 독성의 지름길. 시세 데이터가 안정된 뒤에나 재검토.</td></tr>
+<tr><td class="drop">무제한 자랑 명령</td><td>도배 = TCG 커뮤니티 최대 비호감 + 그룹 노이즈. 하루 1회 제한이 본질.</td></tr>
+<tr><td class="drop">스트릭 끊기면 페널티</td><td>숙제화. "안 해도 재밌음" 원칙 위반.</td></tr>
+</table>
+
+<h2>4. 우선순위와 이유</h2>
+<table>
+<tr><th>순위</th><th>기능</th><th>이유</th></tr>
+<tr><td>1</td><td><b>B. 퀴즈 스트릭 + 공유 그리드</b></td><td>오늘 밤부터 도는 퀴즈에 바로 얹는 것. 새 시스템이 아니라 문법 추가라 제일 싸고, Wordle 공식은 검증됨.</td></tr>
+<tr><td>2</td><td><b>A. 플렉스 카드</b></td><td>자랑은 사장님이 꼽은 "반드시 필요한 것". 렌더 인프라가 이미 있어 그림만 잘 뽑으면 됨. 조작 불가 = 차별점이 가장 살아나는 기능.</td></tr>
+<tr><td>3</td><td>C. 이번 주 최고의 한 장</td><td>주 1회 자동, 방에 이벤트 순간 생성. 시세 노이즈 방어 설계가 붙어야 해서 3순위.</td></tr>
+<tr><td>보류</td><td>D. 잭팟 나눔</td><td>참여 폭발력은 최고지만 "안 나누면 눈치" 리스크. 방 분위기 보고 결정.</td></tr>
+</table>
+
+<h2>5. 리스크 정리</h2>
+<div class="box">
+<b>① 베타 시세 노이즈</b> — 자랑 카드·베스트 무버의 숫자가 틀리면 신뢰가 무너진다. 모든 화면에 "참고용 시세" 문구 유지 + 신뢰도 낮은 가격은 집계 제외.<br><br>
+<b>② 돈독 프레임</b> — 문구를 계속 "운/안목/컬렉션" 쪽으로. "얼마 벌었다"는 우리가 먼저 말하지 않는다.<br><br>
+<b>③ 그룹 노이즈</b> — 자랑 1일 1회, 베스트 무버 주 1회, 퀴즈 1일 1회. 봇 발화량 총량을 하루 손에 꼽게 유지 (TGPoke 캠프 알림 노이즈화의 교훈).<br><br>
+<b>④ 수치는 전부 초안</b> — 보상량·제한 횟수는 그룹이 굴러가는 걸 보고 조절 필요.
+</div>
+
+<p class="small">참고 문서: 게임 철학(docs/GAME_PHILOSOPHY.md) · 르네이스 TCG 가이드 기획(RENAISS_TCG_GUIDE_PLAN_2026-07-07.md) · 상금 제안서(RENAISS_QUIZ_SPONSORSHIP_PROPOSAL_2026-07-07.md)</p>
+
+</body>
+</html>

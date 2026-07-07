@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Renaiss Price Overlay Render Examples</title>
+  <style>
+    :root {
+      --bg: #f3f0e8;
+      --panel: #fffdf7;
+      --ink: #181d1b;
+      --muted: #69716d;
+      --line: #d9d4c8;
+      --gold: #efca68;
+      --green: #176b5e;
+      --blue: #2e65c7;
+      --red: #c94632;
+      --amber: #a96f0e;
+      --black: #111513;
+      --shadow: 0 24px 70px rgba(24, 29, 27, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    .page {
+      width: min(1280px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 36px 0 52px;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 18px;
+      align-items: end;
+      margin-bottom: 22px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(30px, 5vw, 54px);
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    header p {
+      max-width: 760px;
+      margin: 12px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.55;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 5px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 16px;
+      align-items: start;
+    }
+
+    .example {
+      display: grid;
+      gap: 10px;
+    }
+
+    .example-title {
+      min-height: 74px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    .example-title strong {
+      display: block;
+      font-size: 16px;
+      line-height: 1.2;
+    }
+
+    .example-title span {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .render {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fbfaf5;
+      box-shadow: var(--shadow);
+    }
+
+    .slab {
+      display: grid;
+      grid-template-columns: 1.16fr 0.76fr 0.96fr 1fr;
+      border: 2px solid #090b0a;
+      border-radius: 8px 8px 4px 4px;
+      overflow: hidden;
+      background: var(--black);
+    }
+
+    .slab-brand,
+    .slab-cell,
+    .slab-price {
+      min-height: 58px;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      border-right: 1px solid rgba(255, 255, 255, 0.14);
+    }
+
+    .slab-brand b {
+      color: var(--gold);
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .slab-brand span,
+    .slab-cell span,
+    .slab-price span {
+      color: rgba(255, 255, 255, 0.68);
+      font-size: 9px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .slab-cell b {
+      margin-top: 3px;
+      color: #fff;
+      font-size: 13px;
+      line-height: 1.05;
+    }
+
+    .slab-price {
+      border-right: 0;
+      align-items: center;
+      text-align: center;
+      color: #111;
+    }
+
+    .slab-price.fmv {
+      background: var(--gold);
+    }
+
+    .slab-price.candidate {
+      background: #e6edf9;
+    }
+
+    .slab-price.search {
+      background: #f6e6c6;
+    }
+
+    .slab-price.missing {
+      background: #eadbd7;
+    }
+
+    .slab-price span {
+      color: rgba(17, 17, 17, 0.62);
+    }
+
+    .slab-price b {
+      margin-top: 2px;
+      font-size: 23px;
+      line-height: 1;
+    }
+
+    .card {
+      position: relative;
+      min-height: 430px;
+      margin-top: 6px;
+      border: 7px solid #d6d7d4;
+      border-radius: 12px;
+      background: #f5f4ed;
+      overflow: hidden;
+    }
+
+    .card-head {
+      position: absolute;
+      z-index: 3;
+      top: 18px;
+      left: 18px;
+      right: 18px;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: start;
+      color: #fff;
+      text-shadow: 0 2px 5px rgba(0, 0, 0, 0.42);
+    }
+
+    .card-head h2 {
+      margin: 0;
+      font-size: 27px;
+      line-height: 1;
+    }
+
+    .card-head span {
+      font-size: 15px;
+      font-weight: 900;
+    }
+
+    .art {
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at 24% 22%, rgba(255, 255, 255, 0.86), transparent 20%),
+        radial-gradient(circle at 70% 34%, rgba(244, 206, 104, 0.82), transparent 19%),
+        linear-gradient(145deg, #477f6b, #8a6d4a 46%, #312e37);
+    }
+
+    .art::before {
+      content: "";
+      position: absolute;
+      width: 220px;
+      height: 280px;
+      left: 50%;
+      top: 48%;
+      transform: translate(-50%, -50%) rotate(-10deg);
+      background: rgba(53, 35, 79, 0.92);
+      clip-path: polygon(50% 0, 86% 20%, 100% 54%, 72% 100%, 31% 86%, 0 58%, 18% 20%);
+      box-shadow: inset 36px 18px 0 rgba(242, 213, 95, 0.72);
+    }
+
+    .art::after {
+      content: "";
+      position: absolute;
+      width: 260px;
+      height: 88px;
+      left: 32px;
+      bottom: 92px;
+      border-radius: 999px;
+      border: 14px solid rgba(57, 36, 82, 0.9);
+      border-left-color: transparent;
+      border-top-color: transparent;
+      transform: rotate(-20deg);
+    }
+
+    .card-copy {
+      position: absolute;
+      z-index: 3;
+      left: 18px;
+      right: 18px;
+      bottom: 18px;
+      padding: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.42);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.76);
+      backdrop-filter: blur(8px);
+    }
+
+    .card-copy strong {
+      display: block;
+      font-size: 18px;
+    }
+
+    .card-copy span {
+      display: block;
+      margin-top: 4px;
+      color: #4e5854;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .telegram {
+      min-height: 160px;
+      padding: 12px;
+      border: 1px solid #cfd7de;
+      border-radius: 8px;
+      background: #eef4f8;
+    }
+
+    .bubble {
+      padding: 12px;
+      border-radius: 8px;
+      background: #fff;
+      border: 1px solid #d6e0e8;
+      box-shadow: 0 8px 24px rgba(65, 92, 116, 0.08);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .bubble b {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 14px;
+    }
+
+    .buttons {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .button {
+      min-height: 32px;
+      display: grid;
+      place-items: center;
+      padding: 6px 8px;
+      border-radius: 8px;
+      background: #1d2a26;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 900;
+      text-align: center;
+    }
+
+    .button.renaiss {
+      background: #efca68;
+      color: #111513;
+      border: 1px solid #111513;
+      box-shadow: inset 0 -2px 0 rgba(17, 21, 19, 0.18);
+    }
+
+    .button.secondary {
+      background: #dfe8f7;
+      color: #1c3d78;
+    }
+
+    .button.wait {
+      background: #f4e2cc;
+      color: #804b0e;
+    }
+
+    .button.disabled {
+      background: #e2dfd8;
+      color: #716b62;
+    }
+
+    .spec {
+      margin-top: 20px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    .spec h2 {
+      margin: 0 0 10px;
+      font-size: 18px;
+    }
+
+    .spec-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .spec-item {
+      min-height: 78px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #faf8f0;
+    }
+
+    .spec-item strong {
+      display: block;
+      font-size: 14px;
+    }
+
+    .spec-item span {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    @media (max-width: 1180px) {
+      header {
+        grid-template-columns: 1fr;
+      }
+
+      .legend {
+        justify-content: flex-start;
+      }
+
+      .grid,
+      .spec-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 680px) {
+      .grid,
+      .spec-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .slab {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .slab-cell:nth-child(2) {
+        border-right: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <div>
+        <h1>Renaiss 가격 상단바 렌더링 예시</h1>
+        <p>카드팩 결과 이미지 위 PSA 영역을 Renaiss 로고, 등급, 시장 상태, FMV 가격으로 바꾸는 예시입니다. 르네에 없을 때도 게임은 그대로 진행되고, 가격 영역만 상태별 fallback으로 바뀝니다.</p>
+      </div>
+      <div class="legend">
+        <span class="pill">exact</span>
+        <span class="pill">candidate</span>
+        <span class="pill">search_only</span>
+        <span class="pill">missing</span>
+      </div>
+    </header>
+
+    <section class="grid" aria-label="Renaiss overlay render states">
+      <article class="example">
+        <div class="example-title">
+          <strong>1. 정확 매칭</strong>
+          <span>Renaiss 카드와 정확히 연결된 상태. FMV와 레퍼럴 링크를 바로 노출합니다.</span>
+        </div>
+        <div class="render">
+          <div class="slab">
+            <div class="slab-brand"><b>RENAISS</b><span>TCG Market</span></div>
+            <div class="slab-cell"><span>Grade</span><b>PSA 10</b></div>
+            <div class="slab-cell"><span>Market</span><b>FMV Live</b></div>
+            <div class="slab-price fmv"><span>Renaiss FMV</span><b>$430</b></div>
+          </div>
+          <div class="card">
+            <div class="art"></div>
+            <div class="card-head"><h2>리자몽 ex</h2><span>SAR</span></div>
+            <div class="card-copy"><strong>최고 카드 획득</strong><span>도감 +1 · 컬렉션 가치 +$430 · Renaiss 링크 준비됨</span></div>
+          </div>
+        </div>
+        <div class="telegram">
+          <div class="bubble">
+            <b>🔥 리자몽 ex SAR</b>
+            Renaiss 기준가: $430 · 7일 +12.4%<br>
+            도감 수집률: 42% -> 44%
+            <div class="buttons">
+              <span class="button renaiss">Renaiss에서 가격 보기</span>
+              <span class="button secondary">내 컬렉션 보기</span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="example">
+        <div class="example-title">
+          <strong>2. 후보 매칭</strong>
+          <span>이름/세트 후보는 있지만 등급이나 번호가 확정되지 않은 상태입니다.</span>
+        </div>
+        <div class="render">
+          <div class="slab">
+            <div class="slab-brand"><b>RENAISS</b><span>TCG Market</span></div>
+            <div class="slab-cell"><span>Grade</span><b>PSA ?</b></div>
+            <div class="slab-cell"><span>Market</span><b>3 후보</b></div>
+            <div class="slab-price candidate"><span>Price Range</span><b>$380~$430</b></div>
+          </div>
+          <div class="card">
+            <div class="art"></div>
+            <div class="card-head"><h2>피카츄</h2><span>AR</span></div>
+            <div class="card-copy"><strong>후보 가격 확인 필요</strong><span>도감 +1 · 후보 3개 · 관리자 매칭 대기</span></div>
+          </div>
+        </div>
+        <div class="telegram">
+          <div class="bubble">
+            <b>⚡ 피카츄 AR</b>
+            Renaiss 후보 가격: $380~$430 · 7일 +4~9%<br>
+            정확한 세트/등급 확인 필요
+            <div class="buttons">
+              <span class="button renaiss">Renaiss 후보 보기</span>
+              <span class="button disabled">관리자 매칭 대기</span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="example">
+        <div class="example-title">
+          <strong>3. 검색 링크만 있음</strong>
+          <span>자산 ID는 없지만 카드명 검색 링크를 만들 수 있는 상태입니다.</span>
+        </div>
+        <div class="render">
+          <div class="slab">
+            <div class="slab-brand"><b>RENAISS</b><span>TCG Market</span></div>
+            <div class="slab-cell"><span>Grade</span><b>RAW</b></div>
+            <div class="slab-cell"><span>Market</span><b>Search</b></div>
+            <div class="slab-price search"><span>FMV</span><b>확인 필요</b></div>
+          </div>
+          <div class="card">
+            <div class="art"></div>
+            <div class="card-head"><h2>뮤츠 ex</h2><span>RR</span></div>
+            <div class="card-copy"><strong>Renaiss에서 직접 검색</strong><span>도감 +1 · 가격 미확정 · 검색 링크 제공</span></div>
+          </div>
+        </div>
+        <div class="telegram">
+          <div class="bubble">
+            <b>🧬 뮤츠 ex RR</b>
+            Renaiss 가격/변동: 아직 매칭 전<br>
+            카드명으로 Renaiss 검색 가능
+            <div class="buttons">
+              <span class="button renaiss">Renaiss에서 검색하기</span>
+              <span class="button secondary">내 컬렉션 보기</span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="example">
+        <div class="example-title">
+          <strong>4. 르네에 없음</strong>
+          <span>검색해도 없는 상태입니다. 가격 영역은 등록 대기로 표시하고 게임 보상은 정상 지급합니다.</span>
+        </div>
+        <div class="render">
+          <div class="slab">
+            <div class="slab-brand"><b>RENAISS</b><span>TCG Market</span></div>
+            <div class="slab-cell"><span>Grade</span><b>N/A</b></div>
+            <div class="slab-cell"><span>Market</span><b>Not Listed</b></div>
+            <div class="slab-price missing"><span>FMV</span><b>등록 대기</b></div>
+          </div>
+          <div class="card">
+            <div class="art"></div>
+            <div class="card-head"><h2>님피아</h2><span>CHR</span></div>
+            <div class="card-copy"><strong>가격 없이도 수집 진행</strong><span>도감 +1 · IV/업적 성장 정상 반영</span></div>
+          </div>
+        </div>
+        <div class="telegram">
+          <div class="bubble">
+            <b>🌙 님피아 CHR</b>
+            Renaiss 가격/변동: 등록 대기<br>
+            도감/성장 보상은 정상 반영됨
+            <div class="buttons">
+              <span class="button disabled">Renaiss 등록 대기</span>
+              <span class="button secondary">내 컬렉션 보기</span>
+            </div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="spec">
+      <h2>렌더링 규칙</h2>
+      <div class="spec-grid">
+        <div class="spec-item">
+          <strong>exact</strong>
+          <span>이미지에는 FMV 가격과 레퍼럴 링크 CTA를 위한 상태만 보여주고, 최근 변동률은 채팅 텍스트에 표시합니다.</span>
+        </div>
+        <div class="spec-item">
+          <strong>candidate</strong>
+          <span>가격 범위, 후보 수, 후보들의 최근 변동 범위를 보여주고 관리자 매칭 후 exact로 승격합니다.</span>
+        </div>
+        <div class="spec-item">
+          <strong>search_only</strong>
+          <span>가격은 비우고 카드명 기반 Renaiss 검색 링크만 제공합니다.</span>
+        </div>
+        <div class="spec-item">
+          <strong>missing</strong>
+          <span>상단바에는 등록 대기를 표시합니다. 카드팩, 도감, IV, 업적 보상은 막지 않습니다.</span>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

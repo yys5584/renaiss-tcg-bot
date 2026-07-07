@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+*.log
+.venv/
+venv/
+.pytest_cache/
+.DS_Store
+*.png
+!renaiss_bot/assets/**

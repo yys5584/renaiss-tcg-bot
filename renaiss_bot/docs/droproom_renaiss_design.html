@@ -1,0 +1,1525 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DropRoom for Renaiss - 한국어 디자인 프로토타입</title>
+  <style>
+    :root {
+      --bg: #f4f2ea;
+      --surface: #fffcf5;
+      --surface-2: #f7f7fb;
+      --ink: #17201d;
+      --muted: #66706c;
+      --line: #d9d6cb;
+      --line-dark: #b9b5a9;
+      --green: #166b5d;
+      --green-2: #d8eee8;
+      --blue: #2f63c7;
+      --blue-2: #dfe9ff;
+      --coral: #d95c3f;
+      --coral-2: #ffe5dc;
+      --amber: #b77913;
+      --amber-2: #fff1cf;
+      --purple: #6c54c4;
+      --purple-2: #eee9ff;
+      --shadow: 0 18px 50px rgba(23, 32, 29, 0.1);
+      --radius: 8px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 15px;
+      line-height: 1.45;
+      letter-spacing: 0;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 240px minmax(0, 1fr);
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      background: #17201d;
+      color: #f9f4e8;
+      padding: 22px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-mark {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: #f1c45c;
+      color: #17201d;
+      font-weight: 900;
+    }
+
+    .brand-text strong {
+      display: block;
+      font-size: 15px;
+      line-height: 1.15;
+    }
+
+    .brand-text span {
+      display: block;
+      margin-top: 2px;
+      color: #b8c2bd;
+      font-size: 12px;
+    }
+
+    .nav {
+      display: grid;
+      gap: 6px;
+    }
+
+    .nav a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 38px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      color: #cbd5d0;
+    }
+
+    .nav a.active,
+    .nav a:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+    }
+
+    .side-note {
+      margin-top: auto;
+      padding: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 8px;
+      color: #d7ddd9;
+      font-size: 12px;
+    }
+
+    .side-note strong {
+      display: block;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    .main {
+      min-width: 0;
+      padding: 22px;
+    }
+
+    .topbar {
+      min-height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    .page-title h1 {
+      margin: 0;
+      font-size: clamp(28px, 4vw, 46px);
+      line-height: 1.02;
+      letter-spacing: 0;
+    }
+
+    .page-title p {
+      margin: 8px 0 0;
+      max-width: 740px;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .btn {
+      border: 1px solid var(--line-dark);
+      background: var(--surface);
+      color: var(--ink);
+      min-height: 40px;
+      padding: 9px 12px;
+      border-radius: 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: default;
+      white-space: nowrap;
+    }
+
+    .btn.primary {
+      border-color: #17201d;
+      background: #17201d;
+      color: #fff;
+    }
+
+    .btn.green {
+      border-color: var(--green);
+      background: var(--green);
+      color: #fff;
+    }
+
+    .btn.renaiss {
+      border-color: #111513;
+      background: #efca68;
+      color: #111513;
+      font-weight: 900;
+      box-shadow: inset 0 -2px 0 rgba(17, 21, 19, 0.18);
+    }
+
+    .icon {
+      width: 18px;
+      height: 18px;
+      display: inline-block;
+      flex: 0 0 18px;
+    }
+
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: minmax(300px, 0.9fr) minmax(360px, 1.35fr);
+      gap: 16px;
+      align-items: stretch;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel-header {
+      min-height: 52px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .panel-header h2,
+    .section-title h2 {
+      margin: 0;
+      font-size: 17px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .panel-header .meta,
+    .section-title .meta {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .telegram {
+      min-height: 626px;
+      display: flex;
+      flex-direction: column;
+      background: #eef3f8;
+    }
+
+    .telegram .panel-header {
+      background: #2c6d9f;
+      color: #fff;
+      border: none;
+    }
+
+    .telegram .meta {
+      color: rgba(255, 255, 255, 0.76);
+    }
+
+    .chat {
+      padding: 16px;
+      display: grid;
+      gap: 12px;
+      flex: 1;
+      align-content: start;
+    }
+
+    .bubble {
+      max-width: 92%;
+      padding: 12px;
+      border-radius: 8px;
+      background: #fff;
+      border: 1px solid #d7e0e8;
+      box-shadow: 0 4px 16px rgba(44, 109, 159, 0.08);
+    }
+
+    .bubble.user {
+      justify-self: end;
+      background: #dff0ff;
+    }
+
+    .bubble-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+      font-weight: 800;
+    }
+
+    .bubble-title span {
+      color: #5a6770;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .drop-stats,
+    .pack-stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin: 10px 0 12px;
+    }
+
+    .mini-stat {
+      min-height: 48px;
+      padding: 8px;
+      border: 1px solid #dde5ec;
+      border-radius: 8px;
+      background: #f8fbfe;
+    }
+
+    .mini-stat b {
+      display: block;
+      font-size: 16px;
+    }
+
+    .mini-stat span {
+      color: #65717a;
+      font-size: 11px;
+    }
+
+    .chat-command {
+      display: inline-flex;
+      align-items: center;
+      min-height: 32px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      background: #17201d;
+      color: #fff;
+      font-weight: 800;
+      font-size: 13px;
+    }
+
+    .content-stack {
+      display: grid;
+      gap: 16px;
+    }
+
+    .metric-strip {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .metric {
+      min-height: 94px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 28px;
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .metric small {
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .reveal {
+      display: grid;
+      grid-template-columns: minmax(230px, 0.82fr) minmax(300px, 1fr);
+      min-height: 360px;
+    }
+
+    .card-stage {
+      padding: 18px;
+      background: #151b1a;
+      color: #fff;
+      display: grid;
+      align-content: center;
+      gap: 14px;
+    }
+
+    .renaiss-slab {
+      display: grid;
+      grid-template-columns: 1.15fr 0.86fr 0.86fr 1fr;
+      border: 2px solid #080a09;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #0d100f;
+      box-shadow: 0 14px 36px rgba(0, 0, 0, 0.28);
+    }
+
+    .slab-brand,
+    .slab-cell,
+    .slab-price {
+      min-height: 66px;
+      padding: 9px 10px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      border-right: 1px solid rgba(255, 255, 255, 0.14);
+    }
+
+    .slab-brand {
+      background: #101412;
+    }
+
+    .slab-brand b {
+      font-size: 22px;
+      line-height: 1;
+      letter-spacing: 0;
+      color: #f3cf75;
+    }
+
+    .slab-brand span,
+    .slab-cell span,
+    .slab-price span {
+      display: block;
+      color: rgba(255, 255, 255, 0.68);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .slab-cell b {
+      margin-top: 4px;
+      font-size: 17px;
+      line-height: 1;
+      color: #fff;
+    }
+
+    .slab-price {
+      border-right: 0;
+      background: #f2cf74;
+      color: #0c0d0c;
+      align-items: center;
+      text-align: center;
+    }
+
+    .slab-price span {
+      color: rgba(12, 13, 12, 0.64);
+    }
+
+    .slab-price b {
+      margin-top: 2px;
+      font-size: 34px;
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .collectible-card {
+      position: relative;
+      min-height: 318px;
+      border-radius: 8px;
+      padding: 12px;
+      background: #f5efe2;
+      color: #141a18;
+      border: 1px solid rgba(255, 255, 255, 0.32);
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+      overflow: hidden;
+    }
+
+    .collectible-card.legendary {
+      background:
+        linear-gradient(135deg, rgba(241, 196, 92, 0.42), transparent 38%),
+        linear-gradient(315deg, rgba(47, 99, 199, 0.28), transparent 44%),
+        #fff8df;
+    }
+
+    .card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      position: relative;
+      z-index: 2;
+    }
+
+    .grade {
+      min-height: 26px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #17201d;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .serial {
+      color: rgba(23, 32, 29, 0.62);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .card-art {
+      position: relative;
+      z-index: 1;
+      height: 174px;
+      margin: 16px 0 12px;
+      border: 1px solid rgba(23, 32, 29, 0.16);
+      border-radius: 8px;
+      background:
+        linear-gradient(140deg, rgba(22, 107, 93, 0.88), rgba(47, 99, 199, 0.86)),
+        repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.16) 0 10px, transparent 10px 22px);
+      overflow: hidden;
+    }
+
+    .card-art::before,
+    .card-art::after {
+      content: "";
+      position: absolute;
+      inset: auto;
+      background: rgba(255, 255, 255, 0.86);
+      transform: rotate(36deg);
+    }
+
+    .card-art::before {
+      width: 92px;
+      height: 168px;
+      left: 70px;
+      top: 6px;
+      clip-path: polygon(50% 0, 94% 42%, 72% 100%, 28% 100%, 6% 42%);
+    }
+
+    .card-art::after {
+      width: 42px;
+      height: 104px;
+      right: 46px;
+      bottom: 16px;
+      opacity: 0.72;
+      clip-path: polygon(50% 0, 100% 34%, 82% 100%, 18% 100%, 0 34%);
+    }
+
+    .card-name {
+      position: relative;
+      z-index: 2;
+    }
+
+    .card-name h3 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+
+    .card-name p {
+      margin: 5px 0 0;
+      color: rgba(23, 32, 29, 0.68);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .card-bottom {
+      position: relative;
+      z-index: 2;
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .card-bottom div {
+      min-height: 44px;
+      padding: 8px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.58);
+      border: 1px solid rgba(23, 32, 29, 0.1);
+    }
+
+    .card-bottom span {
+      display: block;
+      color: rgba(23, 32, 29, 0.58);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .card-bottom b {
+      display: block;
+      font-size: 14px;
+    }
+
+    .reveal-copy {
+      padding: 18px;
+      display: grid;
+      align-content: start;
+      gap: 16px;
+    }
+
+    .label-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .eyebrow {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 28px;
+      padding: 5px 8px;
+      border-radius: 999px;
+      background: var(--green-2);
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .reveal-copy h2 {
+      margin: 0;
+      font-size: 30px;
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .summary-item {
+      min-height: 74px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-2);
+    }
+
+    .summary-item span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .summary-item b {
+      display: block;
+      margin-top: 3px;
+      font-size: 22px;
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .pull-list {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .price-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .price-actions .btn {
+      width: 100%;
+      white-space: normal;
+      text-align: center;
+    }
+
+    .pull-row {
+      min-height: 48px;
+      padding: 10px 12px;
+      display: grid;
+      grid-template-columns: 92px minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .pull-row:last-child {
+      border-bottom: 0;
+    }
+
+    .rarity {
+      display: inline-flex;
+      justify-content: center;
+      min-height: 24px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .rarity.legendary {
+      background: var(--amber-2);
+      color: var(--amber);
+    }
+
+    .rarity.epic {
+      background: var(--purple-2);
+      color: var(--purple);
+    }
+
+    .rarity.rare {
+      background: var(--blue-2);
+      color: var(--blue);
+    }
+
+    .section {
+      margin-top: 18px;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 16px;
+      margin: 0 0 12px;
+    }
+
+    .collection-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 330px;
+      gap: 16px;
+      align-items: stretch;
+    }
+
+    .collection-main {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 12px;
+    }
+
+    .progress-band {
+      min-height: 108px;
+      padding: 16px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      display: grid;
+      grid-template-columns: minmax(180px, 0.8fr) minmax(280px, 1.2fr);
+      gap: 18px;
+      align-items: center;
+    }
+
+    .progress-number {
+      font-size: 44px;
+      line-height: 1;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+
+    .progress-number span {
+      color: var(--green);
+    }
+
+    .bar-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .bar-row {
+      display: grid;
+      grid-template-columns: 88px minmax(0, 1fr) 34px;
+      gap: 10px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .bar {
+      height: 9px;
+      border-radius: 999px;
+      background: #e7e2d5;
+      overflow: hidden;
+    }
+
+    .bar i {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+    }
+
+    .holdings {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .holding {
+      min-height: 232px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      display: grid;
+      grid-template-rows: 114px auto;
+      gap: 10px;
+    }
+
+    .mini-art {
+      border-radius: 8px;
+      border: 1px solid rgba(23, 32, 29, 0.12);
+      background:
+        linear-gradient(150deg, rgba(47, 99, 199, 0.88), rgba(216, 92, 63, 0.72)),
+        repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.18) 0 8px, transparent 8px 18px);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .mini-art.alt {
+      background:
+        linear-gradient(150deg, rgba(108, 84, 196, 0.9), rgba(183, 121, 19, 0.78)),
+        repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.16) 0 7px, transparent 7px 18px);
+    }
+
+    .mini-art.third {
+      background:
+        linear-gradient(150deg, rgba(22, 107, 93, 0.92), rgba(47, 99, 199, 0.74)),
+        repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.18) 0 9px, transparent 9px 18px);
+    }
+
+    .mini-art::after {
+      content: "";
+      position: absolute;
+      inset: 24px 42px;
+      background: rgba(255, 255, 255, 0.8);
+      clip-path: polygon(50% 0, 100% 36%, 82% 100%, 18% 100%, 0 36%);
+    }
+
+    .holding h3 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+
+    .holding p {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .tag-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .tag {
+      min-height: 24px;
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 7px;
+      border-radius: 999px;
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .ai-note {
+      padding: 16px;
+      background: #17201d;
+      color: #f8f3e8;
+      border-radius: var(--radius);
+      display: grid;
+      gap: 16px;
+      align-content: start;
+    }
+
+    .ai-note h2 {
+      margin: 0;
+      font-size: 21px;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+
+    .ai-note p {
+      margin: 0;
+      color: #d8dfdc;
+    }
+
+    .note-block {
+      padding-top: 12px;
+      border-top: 1px solid rgba(255, 255, 255, 0.14);
+    }
+
+    .note-block strong {
+      display: block;
+      margin-bottom: 5px;
+      color: #fff;
+      font-size: 13px;
+    }
+
+    .ops-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 340px;
+      gap: 16px;
+    }
+
+    .funnel {
+      padding: 16px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+
+    .funnel-steps {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .funnel-step {
+      min-height: 112px;
+      padding: 12px;
+      border-radius: 8px;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .funnel-step:nth-child(1) {
+      background: var(--green);
+    }
+
+    .funnel-step:nth-child(2) {
+      background: var(--blue);
+    }
+
+    .funnel-step:nth-child(3) {
+      background: var(--purple);
+    }
+
+    .funnel-step:nth-child(4) {
+      background: var(--coral);
+    }
+
+    .funnel-step:nth-child(5) {
+      background: #17201d;
+    }
+
+    .funnel-step span {
+      opacity: 0.78;
+      font-size: 12px;
+    }
+
+    .funnel-step b {
+      font-size: 28px;
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .health {
+      padding: 16px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+
+    .health-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .health-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      min-height: 42px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .health-row:last-child {
+      border-bottom: 0;
+    }
+
+    .health-row span {
+      color: var(--muted);
+    }
+
+    .health-row b {
+      font-size: 16px;
+    }
+
+    .footer-note {
+      margin-top: 18px;
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fffdf8;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .footer-note strong {
+      color: var(--ink);
+    }
+
+    @media (max-width: 1180px) {
+      .app {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        position: static;
+        height: auto;
+        flex-direction: row;
+        align-items: center;
+        overflow-x: auto;
+      }
+
+      .nav {
+        grid-auto-flow: column;
+        grid-auto-columns: max-content;
+      }
+
+      .side-note {
+        display: none;
+      }
+
+      .dashboard-grid,
+      .collection-layout,
+      .ops-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .telegram {
+        min-height: auto;
+      }
+    }
+
+    @media (max-width: 780px) {
+      .main {
+        padding: 14px;
+      }
+
+      .topbar {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .actions {
+        justify-content: stretch;
+      }
+
+      .btn {
+        flex: 1 1 auto;
+      }
+
+      .metric-strip,
+      .summary-grid,
+      .holdings,
+      .funnel-steps,
+      .progress-band,
+      .reveal {
+        grid-template-columns: 1fr;
+      }
+
+      .dashboard-grid {
+        gap: 12px;
+      }
+
+      .metric {
+        min-height: 74px;
+      }
+
+      .metric strong {
+        font-size: 24px;
+      }
+
+      .collectible-card {
+        min-height: 292px;
+      }
+
+      .pull-row {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 5px;
+      }
+
+      .renaiss-slab {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .slab-cell:nth-child(2) {
+        border-right: 0;
+      }
+
+      .slab-brand,
+      .slab-cell,
+      .slab-price {
+        min-height: 58px;
+      }
+
+      .bar-row {
+        grid-template-columns: 70px minmax(0, 1fr) 32px;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .sidebar {
+        padding: 14px;
+        gap: 12px;
+      }
+
+      .brand-text span {
+        display: none;
+      }
+
+      .nav a {
+        min-height: 34px;
+        padding: 7px 8px;
+      }
+
+      .panel-header,
+      .reveal-copy,
+      .card-stage,
+      .chat,
+      .funnel,
+      .health,
+      .ai-note {
+        padding: 12px;
+      }
+
+      .page-title h1 {
+        font-size: 32px;
+      }
+
+      .page-title p {
+        font-size: 14px;
+      }
+
+      .drop-stats,
+      .pack-stats {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" aria-label="Prototype navigation">
+      <a class="brand" href="#overview">
+        <span class="brand-mark">D</span>
+        <span class="brand-text">
+          <strong>DropRoom</strong>
+          <span>for Renaiss</span>
+        </span>
+      </a>
+
+      <nav class="nav">
+        <a class="active" href="#overview">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2h-4v-7H9v7H5a2 2 0 0 1-2-2z"/></svg>
+          개요
+        </a>
+        <a href="#telegram">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a4 4 0 0 1-4 4H7l-4 4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>
+          라이브 드롭
+        </a>
+        <a href="#collection">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          컬렉션
+        </a>
+        <a href="#ops">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 3 5-7"/></svg>
+          운영
+        </a>
+      </nav>
+
+      <div class="side-note">
+        <strong>데모 모드</strong>
+        포켓몬 TCG 카드가 게임의 중심입니다. 가격은 Renaiss 기준가/링크로 보여주고, 전투력과는 분리해 표시합니다.
+      </div>
+    </aside>
+
+    <main class="main">
+      <section class="topbar" id="overview">
+        <div class="page-title">
+          <h1>텔레그램에서 포켓몬 TCG 카드팩을 열고, Renaiss 가격으로 확인합니다.</h1>
+          <p>유저는 채팅방에서 카드팩을 까고, 내 컬렉션과 성장치를 확인하고, 희귀 카드는 Renaiss 링크로 실제 기준가를 확인합니다.</p>
+        </div>
+        <div class="actions" aria-label="Demo actions">
+          <button class="btn primary">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            포켓몬 팩 열기
+          </button>
+          <button class="btn">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>
+            텔레그램 열기
+          </button>
+          <button class="btn green">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Renaiss 가격 보기
+          </button>
+        </div>
+      </section>
+
+      <section class="dashboard-grid">
+        <article class="panel telegram" id="telegram">
+          <div class="panel-header">
+            <div>
+              <h2>텔레그램 방</h2>
+              <div class="meta">포켓몬 TCG 데모룸</div>
+            </div>
+            <div class="meta">접속 86명</div>
+          </div>
+
+          <div class="chat">
+            <div class="bubble">
+              <div class="bubble-title">DropRoom <span>방금</span></div>
+              <strong>포켓몬 TCG 라이브 팩 드롭이 열렸습니다</strong>
+              <div class="drop-stats">
+                <div class="mini-stat"><b>00:45</b><span>남은 시간</span></div>
+                <div class="mini-stat"><b>18</b><span>참여자</span></div>
+                <div class="mini-stat"><b>3</b><span>당첨자</span></div>
+                <div class="mini-stat"><b>+50</b><span>참여 보상</span></div>
+              </div>
+              <span class="chat-command">/claim 드롭 참여</span>
+            </div>
+
+            <div class="bubble user">
+              <div class="bubble-title">@demo_collector <span>방금</span></div>
+              /claim
+            </div>
+
+            <div class="bubble">
+              <div class="bubble-title">DropRoom <span>00:02</span></div>
+              <strong>포켓몬 카드팩이 지급됐습니다</strong>
+              <p>@demo_collector 님이 카드팩 1개를 획득했습니다. 미당첨자는 참여 보상 +50을 받았습니다.</p>
+              <span class="chat-command">/open 팩 열기</span>
+            </div>
+
+            <div class="bubble">
+              <div class="bubble-title">팩 개봉 완료 <span>00:08</span></div>
+              <strong>최고 카드: 리자몽 ex SAR</strong>
+              <div class="pack-stats">
+                <div class="mini-stat"><b>3</b><span>신규 카드</span></div>
+                <div class="mini-stat"><b>7</b><span>중복 카드</span></div>
+                <div class="mini-stat"><b>44%</b><span>컬렉션</span></div>
+                <div class="mini-stat"><b>$430</b><span>Renaiss 기준가</span></div>
+              </div>
+              <span class="chat-command">Renaiss 링크 보기</span>
+            </div>
+          </div>
+        </article>
+
+        <div class="content-stack">
+          <div class="metric-strip" aria-label="오늘 지표">
+            <div class="metric">
+              <span>드롭</span>
+              <strong>12</strong>
+              <small>오늘 +4</small>
+            </div>
+            <div class="metric">
+              <span>참여</span>
+              <strong>86</strong>
+              <small>전환율 31%</small>
+            </div>
+            <div class="metric">
+              <span>Renaiss 클릭</span>
+              <strong>34</strong>
+              <small>가격 링크</small>
+            </div>
+            <div class="metric">
+              <span>개봉</span>
+              <strong>29</strong>
+              <small>평균 6.8초</small>
+            </div>
+          </div>
+
+          <article class="panel reveal">
+            <div class="card-stage">
+              <div class="eyebrow">최근 리빌</div>
+              <div class="renaiss-slab" aria-label="Renaiss 가격 상단바">
+                <div class="slab-brand">
+                  <b>RENAISS</b>
+                  <span>TCG Market</span>
+                </div>
+                <div class="slab-cell">
+                  <span>Grade</span>
+                  <b>PSA 10</b>
+                </div>
+                <div class="slab-cell">
+                  <span>Market</span>
+                  <b>FMV Live</b>
+                </div>
+                <div class="slab-price">
+                  <span>Renaiss FMV</span>
+                  <b>$430</b>
+                </div>
+              </div>
+              <div class="collectible-card legendary" role="img" aria-label="포켓몬 TCG 카드 리자몽 ex SAR">
+                <div class="card-top">
+                  <span class="grade">전설</span>
+                  <span class="serial">SV4a / SAR</span>
+                </div>
+                <div class="card-art"></div>
+                <div class="card-name">
+                  <h3>리자몽 ex</h3>
+                  <p>포켓몬 TCG · SAR · 첫 획득</p>
+                </div>
+                <div class="card-bottom">
+                  <div><span>Renaiss 기준가</span><b>$430</b></div>
+                  <div><span>컬렉션</span><b>42% -> 44%</b></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="reveal-copy">
+              <div class="label-row">
+                <span class="eyebrow">포켓몬 TCG 팩 #042</span>
+                <span class="status">신규 획득</span>
+              </div>
+              <h2>카드팩 재미와 실물 카드 기준가를 한 번에 보여줍니다.</h2>
+              <div class="summary-grid">
+                <div class="summary-item"><span>신규 카드</span><b>3</b></div>
+                <div class="summary-item"><span>중복 카드</span><b>7</b></div>
+                <div class="summary-item"><span>레어 이상</span><b>2</b></div>
+                <div class="summary-item"><span>점수 상승</span><b>+48</b></div>
+              </div>
+              <div class="pull-list" aria-label="주요 획득 카드">
+                <div class="pull-row">
+                  <span class="rarity legendary">SAR</span>
+                  <strong>리자몽 ex</strong>
+                  <span>신규</span>
+                </div>
+                <div class="pull-row">
+                  <span class="rarity epic">AR</span>
+                  <strong>피카츄</strong>
+                  <span>중복 +성장</span>
+                </div>
+                <div class="pull-row">
+                  <span class="rarity rare">RR</span>
+                  <strong>뮤츠 ex</strong>
+                  <span>신규</span>
+                </div>
+              </div>
+              <div class="price-actions">
+                <a class="btn renaiss" href="https://www.renaiss.xyz/" target="_blank" rel="noreferrer">
+                  Renaiss에서 가격 보기
+                </a>
+                <a class="btn" href="#collection">
+                  내 컬렉션에 반영
+                </a>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="collection">
+        <div class="section-title">
+          <div>
+            <h2>내 포켓몬 TCG 컬렉션</h2>
+            <div class="meta">@demo_collector · 최근 카드팩 결과와 Renaiss 기준가 반영</div>
+          </div>
+        </div>
+
+        <div class="collection-layout">
+          <div class="collection-main">
+            <div class="progress-band">
+              <div>
+                <div class="eyebrow">도감 수집률</div>
+                <div class="progress-number"><span>44</span>%</div>
+              </div>
+              <div class="bar-list">
+                <div class="bar-row">
+                  <span>C/U</span>
+                  <div class="bar"><i style="width: 78%; background: var(--green);"></i></div>
+                  <b>72</b>
+                </div>
+                <div class="bar-row">
+                  <span>RR</span>
+                  <div class="bar"><i style="width: 52%; background: var(--blue);"></i></div>
+                  <b>38</b>
+                </div>
+                <div class="bar-row">
+                  <span>AR/SR</span>
+                  <div class="bar"><i style="width: 34%; background: var(--purple);"></i></div>
+                  <b>17</b>
+                </div>
+                <div class="bar-row">
+                  <span>SAR/UR</span>
+                  <div class="bar"><i style="width: 22%; background: var(--amber);"></i></div>
+                  <b>5</b>
+                </div>
+              </div>
+            </div>
+
+            <div class="holdings" aria-label="대표 보유 카드">
+              <article class="holding">
+                <div class="mini-art"></div>
+                <div>
+                  <h3>리자몽 ex</h3>
+                  <p>SAR · 신규 · Renaiss 기준가 $430</p>
+                  <div class="tag-row">
+                    <span class="tag">SAR</span>
+                    <span class="tag">최고 카드</span>
+                    <span class="tag">Renaiss 링크</span>
+                  </div>
+                </div>
+              </article>
+              <article class="holding">
+                <div class="mini-art alt"></div>
+                <div>
+                  <h3>피카츄</h3>
+                  <p>AR · 중복 성장 +18</p>
+                  <div class="tag-row">
+                    <span class="tag">인기 카드</span>
+                    <span class="tag">성장</span>
+                  </div>
+                </div>
+              </article>
+              <article class="holding">
+                <div class="mini-art third"></div>
+                <div>
+                  <h3>뮤츠 ex</h3>
+                  <p>RR · 세트 빈칸 채움</p>
+                  <div class="tag-row">
+                    <span class="tag">세트 목표</span>
+                    <span class="tag">신규</span>
+                  </div>
+                </div>
+              </article>
+            </div>
+          </div>
+
+          <aside class="ai-note">
+            <div>
+              <div class="eyebrow">AI 카드 노트</div>
+              <h2>리자몽 ex가 유입과 수집 동기를 동시에 만듭니다.</h2>
+            </div>
+            <p>이 카드는 유저가 반응하기 쉬운 포켓몬 TCG 인기 카드입니다. 수집률은 42%에서 44%로 올랐고, Renaiss 기준가 링크를 통해 실제 카드 가치도 바로 확인할 수 있습니다.</p>
+            <div class="note-block">
+              <strong>다음 추천 행동</strong>
+              <p>남은 카드팩 3개를 열거나, 같은 세트의 미보유 SAR/AR 카드를 목표로 잡는 것이 좋습니다.</p>
+            </div>
+            <div class="note-block">
+              <strong>사용한 데이터</strong>
+              <p>카드 메타데이터, Renaiss 기준가/링크, 현재 컬렉션 상태를 사용했습니다.</p>
+            </div>
+            <div class="note-block">
+              <strong>주의 문구</strong>
+              <p>Renaiss 기준가는 게임 내 참고 지표이며, 투자 조언이나 구매 권유가 아닙니다.</p>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="section" id="ops">
+        <div class="section-title">
+          <div>
+            <h2>운영 대시보드</h2>
+            <div class="meta">텔레그램 유입, 팩 개봉, Renaiss 링크 클릭 추적</div>
+          </div>
+        </div>
+
+        <div class="ops-grid">
+          <div class="funnel">
+            <div class="label-row">
+              <h2>TCG 가챠 유입 퍼널</h2>
+              <span class="status">라이브 데모</span>
+            </div>
+            <div class="funnel-steps" aria-label="드롭 퍼널">
+              <div class="funnel-step"><span>노출</span><b>420</b><span>방 메시지 조회</span></div>
+              <div class="funnel-step"><span>참여</span><b>86</b><span>카드팩 참여</span></div>
+              <div class="funnel-step"><span>개봉</span><b>29</b><span>팩 오픈</span></div>
+              <div class="funnel-step"><span>가격 클릭</span><b>18</b><span>Renaiss 이동</span></div>
+              <div class="funnel-step"><span>재참여</span><b>41%</b><span>다음 드롭</span></div>
+            </div>
+          </div>
+
+          <aside class="health">
+            <div class="label-row">
+              <h2>방 상태</h2>
+              <span class="eyebrow">오늘</span>
+            </div>
+            <div class="health-list">
+              <div class="health-row"><span>활성 방</span><b>3</b></div>
+              <div class="health-row"><span>신규 TCG 유저</span><b>14</b></div>
+              <div class="health-row"><span>미개봉 팩</span><b>21</b></div>
+              <div class="health-row"><span>평균 리빌 시간</span><b>6.8초</b></div>
+              <div class="health-row"><span>Renaiss 링크 클릭</span><b>18</b></div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <div class="footer-note">
+        <strong>한국어 기획 메모:</strong>
+        이 화면은 우리 게임의 본질을 "포켓몬 TCG 가챠게임"으로 두고, Renaiss를 카드 기준가와 외부 링크의 신뢰 레이어로 붙이는 방향의 디자인 초안이다. 텔레그램 유저는 카드팩 재미로 들어오고, 희귀 카드를 뽑은 순간 Renaiss 가격 링크를 눌러 실제 카드 가치를 확인하게 된다.
+      </div>
+    </main>
+  </div>
+</body>
+</html>

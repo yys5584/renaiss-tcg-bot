@@ -1,0 +1,9 @@
+[project]
+name = "renaiss-tcg-bot"
+version = "0.1.0"
+description = "Renaiss TCG collector bot for Telegram — real graded-market prices on collectible cards, powered by the Renaiss Index API."
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
