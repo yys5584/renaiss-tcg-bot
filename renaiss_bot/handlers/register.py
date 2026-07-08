@@ -10,6 +10,7 @@ from renaiss_bot.handlers.drop import call_drop_handler, feed_drop_handler
 from renaiss_bot.handlers.flex import cmd_flex, on_flex_props
 from renaiss_bot.handlers.price import cmd_price
 from renaiss_bot.handlers.quiz import on_quiz_answer
+from renaiss_bot.handlers.spawn import catch_handler
 from renaiss_bot.handlers.start import cmd_sets, cmd_start
 
 
@@ -23,6 +24,9 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("price", cmd_price))
     app.add_handler(CommandHandler("flex", cmd_flex))
 
+    # 시즌1식 스폰 잡기: 'c' 한 글자로 진행 중인 스폰 포획
+    app.add_handler(MessageHandler(filters.Regex(r"^[cC]$"), catch_handler))
+    # 레거시 d/f 드랍 (스폰 시스템으로 교체 예정 — 당분간 병행)
     app.add_handler(MessageHandler(filters.Regex(r"^[dD]$"), call_drop_handler))
     app.add_handler(MessageHandler(filters.Regex(r"^[fF]$"), feed_drop_handler))
 

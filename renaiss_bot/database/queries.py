@@ -284,6 +284,38 @@ async def register_pack_cards(
         logger.debug("Renaiss user card register skipped chat=%s: %s", chat_id, exc)
 
 
+async def register_single_card(*, user_id: int, category: str, card) -> None:
+    """스폰에서 잡은 카드 1장을 유저 컬렉션에 등록 (중복이면 수량+1)."""
+    try:
+        card_id = card.local_card_id or f"{card.category}:{card.card_name}:{card.grade}"
+        pool = await get_db()
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO renaiss_user_cards (
+                    user_id, category, local_card_id, card_name, grade, set_code,
+                    collector_number, image_url, market_price_usd, quantity
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 1)
+                ON CONFLICT (user_id, category, local_card_id)
+                DO UPDATE SET
+                    quantity = renaiss_user_cards.quantity + 1,
+                    updated_at = now()
+                """,
+                user_id,
+                category,
+                card_id,
+                card.card_name,
+                card.grade,
+                card.set_code,
+                card.collector_number,
+                card.image_url,
+                card.market_price_usd,
+            )
+    except Exception as exc:
+        logger.debug("Renaiss single card register skipped user=%s: %s", user_id, exc)
+
+
 async def add_drop_points(user_id: int | None, amount: int, *, source: str = "drop") -> None:
     if user_id is None or amount == 0:
         return

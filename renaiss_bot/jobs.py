@@ -10,6 +10,7 @@ from telegram.ext import Application, ContextTypes
 
 from renaiss_bot.database.queries import list_open_quiz_rounds, snapshot_all_portfolios
 from renaiss_bot.handlers.quiz import close_quiz_job, post_daily_quiz, quiz_chat_id
+from renaiss_bot.handlers.spawn import SPAWN_INTERVAL_SECONDS, official_chat_id, spawn_tick
 
 logger = logging.getLogger(__name__)
 
@@ -67,3 +68,16 @@ def register_jobs(application: Application) -> None:
         logger.info("Daily quiz scheduled at 21:00 KST.")
     else:
         logger.info("Daily quiz not scheduled: RENAISS_QUIZ_CHAT_ID not set.")
+
+    # 공식방 상시 스폰 (시즌1 아케이드): 1분 간격
+    if official_chat_id() is not None:
+        job_queue.run_repeating(
+            spawn_tick,
+            interval=SPAWN_INTERVAL_SECONDS,
+            first=SPAWN_INTERVAL_SECONDS,
+            name="renaiss_official_spawn",
+            job_kwargs={"misfire_grace_time": None},
+        )
+        logger.info("Official-room spawn scheduled every %ss.", SPAWN_INTERVAL_SECONDS)
+    else:
+        logger.info("Official spawn not scheduled: RENAISS_OFFICIAL_CHAT_ID/QUIZ_CHAT_ID not set.")
