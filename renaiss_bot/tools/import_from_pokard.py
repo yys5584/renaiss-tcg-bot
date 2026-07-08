@@ -21,6 +21,8 @@ import asyncio
 import json
 import logging
 
+from dotenv import load_dotenv
+
 from renaiss_bot.services.models import CardIdentity
 from renaiss_bot.services.pokard import PokardError, list_cards, make_session
 from renaiss_bot.services.pricing import fetch_price
@@ -161,6 +163,7 @@ async def run(args) -> int:
 
 
 def main() -> int:
+    load_dotenv()
     p = argparse.ArgumentParser()
     p.add_argument("--dry-run", action="store_true", help="DB 미기록, fetch+출력만")
     p.add_argument("--max-cards", type=int, default=20, help="가져올 최대 카드 수 (기본 20=검증)")
