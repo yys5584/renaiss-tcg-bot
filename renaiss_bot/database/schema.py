@@ -273,3 +273,35 @@ async def create_tables(pool: asyncpg.Pool) -> None:
                 ON renaiss_quiz_answers(user_id, answered_at DESC)
             """
         )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS renaiss_flex_posts (
+                id BIGSERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL,
+                chat_id BIGINT NOT NULL,
+                message_id BIGINT,
+                local_card_id TEXT,
+                card_name TEXT,
+                grade TEXT,
+                market_price_usd NUMERIC,
+                flexed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+            """
+        )
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_renaiss_flex_posts_user_time
+                ON renaiss_flex_posts(user_id, flexed_at DESC)
+            """
+        )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS renaiss_flex_props (
+                chat_id BIGINT NOT NULL,
+                message_id BIGINT NOT NULL,
+                tapper_user_id BIGINT NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                PRIMARY KEY (chat_id, message_id, tapper_user_id)
+            )
+            """
+        )

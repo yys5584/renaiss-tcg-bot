@@ -28,6 +28,7 @@ async def _configure_commands(application: Application) -> None:
         BotCommand("open", "Open TCG packs"),
         BotCommand("pack", "Pack guide"),
         BotCommand("mycards", "View portfolio"),
+        BotCommand("flex", "Flex your best card"),
         BotCommand("rank", "Portfolio ranking"),
         BotCommand("price", "Check Market Value"),
         BotCommand("sets", "Supported categories"),

@@ -626,6 +626,109 @@ async def get_quiz_round_number(round_id: int, chat_id: int) -> int:
         return 1
 
 
+async def get_flex_card(user_id: int | None) -> dict | None:
+    """자랑용 최고가 카드 1장 (이미지 URL 포함)."""
+    if user_id is None:
+        return None
+    try:
+        pool = await get_db()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT category, local_card_id, card_name, grade, set_code,
+                       collector_number, image_url, market_price_usd
+                FROM renaiss_user_cards
+                WHERE user_id = $1
+                ORDER BY market_price_usd DESC NULLS LAST, updated_at DESC
+                LIMIT 1
+                """,
+                user_id,
+            )
+        return dict(row) if row else None
+    except Exception as exc:
+        logger.debug("Renaiss flex card fetch skipped: %s", exc)
+        return None
+
+
+async def flexed_today(user_id: int | None) -> bool:
+    if user_id is None:
+        return True
+    try:
+        pool = await get_db()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT 1 FROM renaiss_flex_posts
+                WHERE user_id = $1
+                  AND (flexed_at AT TIME ZONE 'Asia/Seoul')::date = $2
+                LIMIT 1
+                """,
+                user_id,
+                _today_kst(),
+            )
+        return row is not None
+    except Exception as exc:
+        logger.debug("Renaiss flexed_today check skipped: %s", exc)
+        return False
+
+
+async def record_flex(
+    *,
+    user_id: int,
+    chat_id: int,
+    message_id: int | None,
+    card: dict,
+) -> None:
+    try:
+        pool = await get_db()
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO renaiss_flex_posts (
+                    user_id, chat_id, message_id, local_card_id, card_name, grade, market_price_usd
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                """,
+                user_id,
+                chat_id,
+                message_id,
+                card.get("local_card_id"),
+                card.get("card_name"),
+                card.get("grade"),
+                card.get("market_price_usd"),
+            )
+    except Exception as exc:
+        logger.debug("Renaiss flex record skipped: %s", exc)
+
+
+async def add_flex_prop(*, chat_id: int, message_id: int, tapper_user_id: int) -> int | None:
+    """props 기록. 신규면 현재까지 총 props 수 반환, 이미 눌렀으면 None."""
+    try:
+        pool = await get_db()
+        async with pool.acquire() as conn:
+            inserted = await conn.execute(
+                """
+                INSERT INTO renaiss_flex_props (chat_id, message_id, tapper_user_id)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (chat_id, message_id, tapper_user_id) DO NOTHING
+                """,
+                chat_id,
+                message_id,
+                tapper_user_id,
+            )
+            if not inserted.endswith("1"):
+                return None
+            row = await conn.fetchrow(
+                "SELECT COUNT(*)::int AS n FROM renaiss_flex_props WHERE chat_id = $1 AND message_id = $2",
+                chat_id,
+                message_id,
+            )
+        return int(row["n"]) if row else 1
+    except Exception as exc:
+        logger.debug("Renaiss flex prop skipped: %s", exc)
+        return None
+
+
 async def list_open_quiz_rounds() -> list[dict]:
     """재시작 복구용: 아직 정산 안 된 라운드 목록."""
     try:
