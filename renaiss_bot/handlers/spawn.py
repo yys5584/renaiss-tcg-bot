@@ -18,7 +18,7 @@ from time import monotonic
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from renaiss_bot.database.queries import register_single_card
+from renaiss_bot.database.queries import get_portfolio_values, register_single_card
 from renaiss_bot.renderers.overlay import render_overlay_card
 from renaiss_bot.services.models import RenaissPrice
 from renaiss_bot.services.spawn import Spawn, roll_spawn
@@ -196,16 +196,21 @@ async def _resolve(context: ContextTypes.DEFAULT_TYPE, active: ActiveSpawn) -> N
         return_exceptions=True,
     )
 
-    names = ", ".join(escape(n) for n in list(catchers.values())[:12])
-    if len(catchers) > 12:
-        names += f" +{len(catchers) - 12}"
-    value = f"${spawn.market_usd:,.0f}" if spawn.market_usd >= 1 else ""
+    # 등록 후 각자 누적 시세 조회 → "이 카드 시세 + 내 누적시세" 노출 (Lv1 가치 발견)
+    totals = await get_portfolio_values(list(catchers.keys()))
+    value = f"${spawn.market_usd:,.0f}" if spawn.market_usd >= 1 else "-"
+    catch_lines = []
+    for uid, name in list(catchers.items())[:12]:
+        total = totals.get(uid, 0.0)
+        catch_lines.append(f"· {escape(name)} → <b>${total:,.0f}</b>")
+    tail = f"\n… +{len(catchers) - 12} more" if len(catchers) > 12 else ""
     caption = (
         f"{_band_header(spawn)}\n"
         "────────────\n"
-        f"<b>{escape(spawn.card.card_name)}</b> · {escape(spawn.card.grade or '-')}"
-        + (f" · {value}" if value else "")
-        + f"\nCaught by {len(catchers)}: {names}"
+        f"<b>{escape(spawn.card.card_name)}</b> · {escape(spawn.card.grade or '-')} · {value}\n"
+        f"Caught by {len(catchers)} — new collection value:\n"
+        + "\n".join(catch_lines)
+        + tail
     )
 
     # 그레일·레어는 슬랩 라벨 이미지로 크게, 일반은 텍스트

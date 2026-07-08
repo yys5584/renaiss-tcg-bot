@@ -316,6 +316,28 @@ async def register_single_card(*, user_id: int, category: str, card) -> None:
         logger.debug("Renaiss single card register skipped user=%s: %s", user_id, exc)
 
 
+async def get_portfolio_values(user_ids: list[int]) -> dict[int, float]:
+    """유저별 누적 컬렉션 시세($) 한 번에. 잡기 결과에 '내 누적시세' 표시용."""
+    if not user_ids:
+        return {}
+    try:
+        pool = await get_db()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT user_id, COALESCE(SUM(quantity * COALESCE(market_price_usd, 0)), 0)::float AS total
+                FROM renaiss_user_cards
+                WHERE user_id = ANY($1::bigint[])
+                GROUP BY user_id
+                """,
+                user_ids,
+            )
+        return {int(r["user_id"]): float(r["total"] or 0) for r in rows}
+    except Exception as exc:
+        logger.debug("Renaiss portfolio values skipped: %s", exc)
+        return {}
+
+
 async def add_drop_points(user_id: int | None, amount: int, *, source: str = "drop") -> None:
     if user_id is None or amount == 0:
         return

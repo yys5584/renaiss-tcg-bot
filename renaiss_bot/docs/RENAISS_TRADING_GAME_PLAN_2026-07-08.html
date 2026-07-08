@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>르네이스 — TCG 페이퍼 트레이딩 게임 기획서 (2026-07-08)</title>
+<style>
+  body { font-family: 'Pretendard', 'Malgun Gothic', sans-serif; max-width: 880px; margin: 40px auto; padding: 0 24px; line-height: 1.75; color: #2b2b2b; background: #faf8f4; }
+  h1 { font-size: 27px; border-bottom: 3px solid #1d9e75; padding-bottom: 12px; }
+  h2 { font-size: 20px; margin-top: 46px; color: #1a1a1a; border-left: 5px solid #1d9e75; padding-left: 12px; }
+  h3 { font-size: 16px; margin-top: 26px; }
+  .meta { color: #888; font-size: 13px; }
+  .box { background: #fff; border: 1px solid #e0dccf; border-radius: 10px; padding: 18px 22px; margin: 16px 0; }
+  .verdict { background: #e6f5ee; border: 1px solid #1d9e75; border-radius: 10px; padding: 16px 20px; margin: 18px 0; font-weight: 600; }
+  .loop { background: #eef4f1; border-radius: 10px; padding: 18px 22px; margin: 18px 0; font-size: 15px; }
+  .loop b { color: #0f6e56; }
+  .warn { background: #fdf0ea; border-left: 4px solid #d85a30; padding: 12px 16px; margin: 14px 0; border-radius: 0 8px 8px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 14px; background: #fff; }
+  th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #e6f0ea; }
+  code { background: #eaf1ee; padding: 1px 6px; border-radius: 4px; font-size: 90%; }
+  .old { color: #999; }
+</style>
+</head>
+<body>
+
+<h1>르네이스 — TCG 페이퍼 트레이딩 게임</h1>
+<p class="meta">2026-07-08 · 무대: 르네이스 공식방 (영어) · 심장 전환: "잡는 게임" → "트레이딩 게임" · <span class="old">이전 기획 RENAISS_SEASON1_REVIVAL은 이 문서로 대체 (강스는 수입원으로 흡수)</span></p>
+
+<div class="verdict">
+한 줄: <u>실제 카드 시세로 가상 자산을 불리는 페이퍼 트레이딩 게임.</u><br>
+낮엔 강스로 카드(자본)를 모으고, 매일 밤 9시 "마켓 아워"에 다 같이 1시간 트레이딩 배틀 → 순자산 랭킹.
+</div>
+
+<h2>1. 왜 트레이딩이 심장인가</h2>
+<p>르네이스 타겟은 <b>코인 유저</b>다. 리서치에서 확인됨 — 이들은 PnL 인증·페이퍼 트레이딩 대회·수익률 랭킹에 본능적으로 반응한다(TradingView 가짜돈 대회가 굴러가는 이유). 낭만이 아니라 본토다.</p>
+<div class="box">
+- <b>정체성 선명</b>: "포인트 모으기"(RP) → "자산 불리기"($). 실시세가 게임의 전부가 됨.<br>
+- <b>조작 불가</b>: 시세를 서버가 검증 → 코인판 "가짜 스크린샷" 문제 원천 차단. "진짜 실력 트레이더 랭킹"이 성립.<br>
+- <b>강스는 안 버림</b>: 이미 만든 강스 사냥(1단계-a)은 "무료 카드 수입원"으로 역할만 바뀜.
+</div>
+<div class="box">
+<b>데이터 근거 (2026 3~4월 baseline — 살아있던 시기):</b> DAU ≈ 110명(피크 263) · <b>21~22시 일별 순유저 ≈ 32명</b>(라이브 마켓 아워 관중 충분) · 매일 대회(21:50)가 "9시 집결"을 이미 학습 · 집중도 TOP15 47%/TOP50 75%인데 활동유저 872명(캐주얼 롱테일 실재) · 최상위 15인은 100~220 포획/일 극한 그라인더. <b>→ 목표 = 이 규모(~110 DAU)를 신규 코인 유저+복귀로 재현.</b> (현재 DAU~10은 시즌2로 붕괴한 값이라 baseline 아님)
+</div>
+
+<h2>2. 게임 구조 — 3층</h2>
+<table>
+<tr><th>층</th><th>언제</th><th>역할</th></tr>
+<tr><td><b>강스 사냥</b> (잡기)</td><td>낮 상시</td><td>공식방에서 <code>c</code>/<code>m</code>로 무료 카드 확보 = <b>자본·인벤토리</b></td></tr>
+<tr><td><b>트레이딩</b> (사고팔기)</td><td>상시 + 마켓 아워</td><td>가상 $로 카드 사고팔기. 킵 vs 팔기 결정</td></tr>
+<tr><td><b>마켓 아워</b> (데일리 대회)</td><td>매일 21:00~22:00</td><td>시뮬 라이브 장에서 1시간 트레이딩 배틀 → 일일 챔피언</td></tr>
+</table>
+<p><b>메타 목표 = 순자산 랭킹</b> (현금 $ + 보유 카드 시세). 시즌 리셋.</p>
+
+<div class="loop">
+<b>[낮]</b> 강스로 카드 잡음 (자본 축적) → 킵할지 시장에 팔지 결정<br>
+<b>[밤 9시]</b> "🔔 Market open!" → 1시간 시뮬 장에서 다 같이 사고팔며 순자산 불리기<br>
+<b>[밤 10시]</b> "Market close" → 일일 챔피언 발표, 시즌 랭킹 갱신<br>
+<b>[반복]</b> "내일 장 열리기 전에 강스로 자본 더 모아야지"
+</div>
+
+<h2>2.5 설계 제1원칙 — 단순함 + 단계별 자연 공개 ⭐</h2>
+<p>새 유저한테 트레이딩 시스템 전체를 들이밀면 죽는다(철학: "ㅊ만 누르는 유저 기준"). <b>입구는 "수집이 재밌다" 하나</b>. 다음 층은 유저가 준비됐을 때 봇이 자연스럽게 연다.</p>
+<table>
+<tr><th>단계</th><th>유저가 하는 것</th><th>봇이 여는 다음 스텝</th></tr>
+<tr><td><b>Lv0 수집</b></td><td>카드 뜸 → <code>c</code> → 잡음 (설명 0, 즉시 재미)</td><td>—</td></tr>
+<tr><td><b>Lv1 가치 발견</b></td><td>잡은 카드에 시세가 붙어있네?</td><td>"네 컬렉션 = <b>$340</b>" 슬쩍 노출</td></tr>
+<tr><td><b>Lv2 첫 결정</b></td><td>비싼 카드 잡음</td><td>"<b>Sell $120</b> or Keep?" → $ 통화 등장</td></tr>
+<tr><td><b>Lv3 트레이딩</b></td><td>$ 생김</td><td>"오를 것 같은 카드 <b>사볼래?</b>" → 사고팔기</td></tr>
+<tr><td><b>Lv4 마켓 아워+랭킹</b></td><td>트레이딩 재미 붙음</td><td>"밤 9시 <b>라이브 장</b>, 오늘 챔피언 도전"</td></tr>
+</table>
+<div class="box">
+- <b>캐주얼은 Lv0~1에 평생 머물러도 재밌음</b> — 절대 뒤처지는 느낌 X.<br>
+- <b>파는 사람은 Lv4까지 자연스럽게 빨려듦</b> — 강요 아니라 발견.<br>
+- 각 단계 조작 = <b>버튼 1~2개</b>. 차트 읽기·복잡 주문 없음.<br>
+- Lv0~2(수집+솔로 팔기) = 저인구에서도 도는 <b>바닥</b> / Lv4(마켓 아워) = 인구 차면 켜지는 <b>심장</b>. 깔때기가 솔로/라이브를 자동 순서 세움.
+</div>
+
+<h2>3. 통화 — RP → 가상 $ (페이퍼)</h2>
+<div class="box">
+- 기존 RP 개념을 <b>가상 달러($)</b>로 전환. 강스 보상·거래 수익 다 $ 단위.<br>
+- <b>철저히 페이퍼</b>: 랭킹·자랑용 가상 자산. <b>현금 인출 절대 없음</b> (아래 §7 선).<br>
+- 시작 자본: 신규는 소액 $ + 강스로 잡은 카드로 출발.
+</div>
+
+<h2>4. 강스 사냥 = 수입원 (이미 구현)</h2>
+<div class="box">
+1단계-a로 만든 것: 공식방 1분 상시 스폰 + <code>c</code> 잡기 + 시세 밴드(일반/레어/그레일). <b>그대로 쓰되 역할 재정의</b> — 잡은 카드는 "팔아서 $ 만들거나 오를 때까지 킵"하는 <b>자본</b>이다.<br>
+- <code>m</code>(마스터 풀)로 고가 카드 확정 획득 = 좋은 자본 확보.<br>
+- 강스는 "게임의 심장"이 아니라 "매일 장에 들고 갈 실탄을 버는 곳".
+</div>
+
+<h2>5. 트레이딩 — 사고팔기</h2>
+<div class="box">
+- <b>팔기</b>: 보유 카드를 시장에 판다. <b>시세의 N%로 매입</b>(예: 60% — 현실 카드샵도 싸게 사서 마진 남김) → $ 확보 + RP 인플레 방지.<br>
+- <b>사기</b>: 시장/다른 유저 카드가 아니라 <b>NPC 시장에서</b> 산다(P2P 아님 — 고래 착취·조작 차단). 마켓 아워 땐 시뮬 가격으로.<br>
+- <b>킵 vs 팔기 긴장</b>(TCG Card Shop Simulator의 심장): "이 $500 그레일, 자랑·순자산용으로 킵할까 팔아서 실탄 만들까?"
+</div>
+
+<h2>6. 마켓 아워 — 데일리 대회 (핵심)</h2>
+<p><b>매일 21:00~22:00 KST, 공식방에서 1시간 라이브 트레이딩 배틀.</b></p>
+<div class="box">
+<b>왜 시뮬 장인가:</b> 실제 카드 시세는 1시간에 안 움직임(하루도 노이즈). 그래서 그 1시간은 <b>봇이 가상 시장을 돌림</b> — 실시세를 시작값·추세 앵커로 쓰되, 1시간 변동은 시뮬. <b>베타 API 노이즈 문제를 통째로 우회.</b>
+</div>
+<div class="box">
+<b>흐름:</b><br>
+1. 21:00 "🔔 Market open" — 오늘의 거래 카드 20~30종이 라이브 가격으로 뜸<br>
+2. 가격이 30~60초마다 틱(시뮬 랜덤워크 + 실추세 + 가끔 "뉴스" 급등/폭락)<br>
+3. 유저는 <code>buy</code>/<code>sell</code>로 사고팔며 순자산 불림. 잡아둔 카드 = 실탄<br>
+4. 순자산 실시간 갱신 → 방이 1시간 내내 시장에 붙어있음 (트레이딩판의 "우르르")<br>
+5. 22:00 "Market close" — 순자산 잠금, <b>일일 챔피언</b>(순자산 상승률 % 1위) 발표<br>
+</div>
+<div class="box">
+<b>드라마 장치 = 뉴스 이벤트:</b> 장 중에 "📈 Charizard +30%!" / "📉 크래시 -20%" 가 터짐 → 전원 반응. 이게 1시간을 살아있게 하는 심장.
+</div>
+
+<h2>7. 순자산 랭킹 + 넘으면 안 되는 선</h2>
+<table>
+<tr><th>랭킹</th><th>기준</th></tr>
+<tr><td><b>일일 챔피언</b></td><td>그날 마켓 아워 순자산 상승률 % (모두 동등 출발감 → 뉴비도 잘 하면 1등, 격차 0)</td></tr>
+<tr><td><b>시즌 랭킹</b></td><td>누적 순자산($+보유카드). 고인물 앞서나 <b>주/월 시즌 리셋</b>으로 영구 지배 방지</td></tr>
+</table>
+<div class="warn">
+<b>이 방향의 3대 필수선 (못 넘음):</b><br>
+① <b>페이퍼 트레이딩만</b> — 가상 $, 랭킹·자랑용. 현금 인출 0. 넘으면 도박법·P2E 기생충·시세조작 다 터짐.<br>
+② <b>시세 신뢰도 = 생명줄</b> — 게임 전체가 실시세 위. 신뢰도 높은 카드만 거래·앵커. (마켓 아워 변동은 시뮬이라 안전, 앵커값만 실시세)<br>
+③ <b>랭킹 시즌 리셋</b> — 영구 순위 = 다수 이탈(리서치의 줄세우기 피로). 시즌제 필수.
+</div>
+
+<h2>8. 기존 요소 재배치</h2>
+<table>
+<tr><th>기존</th><th>새 역할</th></tr>
+<tr><td>강스 사냥(1단계-a)</td><td>자본 수입원 (심장→수입원)</td></tr>
+<tr><td>데일리 퀴즈(21시)</td><td><b>마켓 아워 프리마켓 워밍업</b> — 장 열기 직전 "오늘 이 카드 오를까?" 감 풀기 (기존 코드 재활용)</td></tr>
+<tr><td>주간 펀드 대회</td><td><b>데일리 마켓 아워로 흡수·통일</b> (둘 다 트레이딩 겨루기라 겹침)</td></tr>
+<tr><td>포트폴리오/RP</td><td>순자산($)·랭킹의 기반으로 승격</td></tr>
+<tr><td>플렉스(<code>/flex</code>)</td><td>트레이딩 성과·그레일 자랑 통로</td></tr>
+<tr><td>카드팩(<code>/open</code>)</td><td>강스 못 하는 시간대 보조 자본 획득</td></tr>
+</table>
+
+<h2>9. 리스크</h2>
+<div class="box">
+<b>① 스코프.</b> 이제 시뮬 시장 엔진·거래 시스템·랭킹을 새로 지어야 함. 큼 → 단계적.<br>
+<b>② 시세 앵커 품질.</b> 실시세가 시작값·추세라, 그 데이터가 비거나 틀리면 시뮬 방향이 이상해짐. 신뢰도 필터 필수.<br>
+<b>③ 트레이딩 진입장벽.</b> "ㅊ만 누르던" 캐주얼에겐 사고팔기가 어려울 수 있음 → 프리마켓 워밍업·단순 UI로 완화. buy/sell은 버튼 2개 수준으로.<br>
+<b>④ 수치 전부 초안.</b> 매입율(%)·시작자본·틱 주기·뉴스 빈도·시즌 길이 다 조절.
+</div>
+
+<h2>10. 단계 (재정렬)</h2>
+<table>
+<tr><td>1</td><td><b>강스 사냥</b> (✅ 1단계-a 완료) — 자본 수입원</td></tr>
+<tr><td>2</td><td><b>$ 전환 + 팔기</b> — RP→$, 카드 시장 매도(시세 N%), 킵 vs 팔기</td></tr>
+<tr><td>3</td><td><b>마켓 아워 엔진</b> — 21시 시뮬 라이브 장, buy/sell, 뉴스 이벤트, 순자산 실시간</td></tr>
+<tr><td>4</td><td><b>랭킹</b> — 일일 챔피언 + 시즌 순자산 랭킹 + 리셋</td></tr>
+<tr><td>5</td><td>퀴즈=프리마켓 재배치, 플렉스·팩 연결, 밸런스</td></tr>
+</table>
+
+<p class="meta">참고: 게임 철학(docs/GAME_PHILOSOPHY.md) · 4월 페르소나 "시간"(시즌1 1위) · 리서치(코인 PnL·페이퍼 트레이딩 대회 문화) · TCG Card Shop Simulator("킵 vs 팔기" 차용)</p>
+
+</body>
+</html>
