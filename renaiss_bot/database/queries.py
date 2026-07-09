@@ -316,6 +316,106 @@ async def register_single_card(*, user_id: int, category: str, card) -> None:
         logger.debug("Renaiss single card register skipped user=%s: %s", user_id, exc)
 
 
+# ── 트레이딩: 가상 $ 잔액 + 카드 매도 ──────────────────────────
+
+SELL_RATE = 0.6  # NPC 시장 매입율 (시세의 60% — 현실 카드샵 마진 + 인플레 방지, 초안)
+
+
+async def get_cash(user_id: int | None) -> float:
+    if user_id is None:
+        return 0.0
+    try:
+        pool = await get_db()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow("SELECT cash_usd FROM renaiss_user_cash WHERE user_id = $1", user_id)
+        return float(row["cash_usd"]) if row else 0.0
+    except Exception as exc:
+        logger.debug("Renaiss cash fetch skipped: %s", exc)
+        return 0.0
+
+
+async def sell_card(user_id: int, local_card_id: str) -> dict | None:
+    """카드 1장을 NPC 시장에 매도 (시세×SELL_RATE). 성공 시 dict, 실패 None.
+    원자적: 보유 확인 → 수량 차감/삭제 → 현금 증가 → 로그."""
+    try:
+        pool = await get_db()
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                card = await conn.fetchrow(
+                    """
+                    SELECT card_name, market_price_usd, quantity
+                    FROM renaiss_user_cards
+                    WHERE user_id = $1 AND local_card_id = $2
+                    FOR UPDATE
+                    """,
+                    user_id,
+                    local_card_id,
+                )
+                if card is None or int(card["quantity"]) <= 0:
+                    return None
+                market = float(card["market_price_usd"] or 0)
+                proceeds = round(market * SELL_RATE, 2)
+                if int(card["quantity"]) > 1:
+                    await conn.execute(
+                        "UPDATE renaiss_user_cards SET quantity = quantity - 1, updated_at = now() "
+                        "WHERE user_id = $1 AND local_card_id = $2",
+                        user_id,
+                        local_card_id,
+                    )
+                else:
+                    await conn.execute(
+                        "DELETE FROM renaiss_user_cards WHERE user_id = $1 AND local_card_id = $2",
+                        user_id,
+                        local_card_id,
+                    )
+                await conn.execute(
+                    """
+                    INSERT INTO renaiss_user_cash (user_id, cash_usd) VALUES ($1, $2)
+                    ON CONFLICT (user_id) DO UPDATE SET
+                        cash_usd = renaiss_user_cash.cash_usd + EXCLUDED.cash_usd, updated_at = now()
+                    """,
+                    user_id,
+                    proceeds,
+                )
+                await conn.execute(
+                    "INSERT INTO renaiss_trade_log (user_id, action, local_card_id, card_name, market_usd, cash_delta) "
+                    "VALUES ($1, 'sell', $2, $3, $4, $5)",
+                    user_id,
+                    local_card_id,
+                    card["card_name"],
+                    market,
+                    proceeds,
+                )
+        return {"card_name": card["card_name"], "market_usd": market, "proceeds": proceeds}
+    except Exception as exc:
+        logger.warning("Renaiss sell_card failed user=%s: %s", user_id, exc)
+        return None
+
+
+async def get_sellable_cards(user_id: int | None, *, limit: int = 8) -> list[dict]:
+    """매도 가능한 보유 카드 (시세 높은 순)."""
+    if user_id is None:
+        return []
+    try:
+        pool = await get_db()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT local_card_id, card_name, grade, quantity, market_price_usd
+                FROM renaiss_user_cards
+                WHERE user_id = $1 AND market_price_usd IS NOT NULL AND market_price_usd > 0
+                ORDER BY market_price_usd DESC, updated_at DESC
+                LIMIT $2
+                """,
+                user_id,
+                limit,
+            )
+        return [dict(r) for r in rows]
+    except Exception as exc:
+        logger.debug("Renaiss sellable cards skipped: %s", exc)
+        return []
+
+
 async def get_portfolio_values(user_ids: list[int]) -> dict[int, float]:
     """유저별 누적 컬렉션 시세($) 한 번에. 잡기 결과에 '내 누적시세' 표시용."""
     if not user_ids:

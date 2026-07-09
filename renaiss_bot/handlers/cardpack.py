@@ -136,13 +136,14 @@ def _change_7d_suffix(stats: PortfolioStats) -> str:
     return suffix + ")"
 
 
-def _portfolio_text(stats: PortfolioStats, rp_balance: int = 0) -> str:
+def _portfolio_text(stats: PortfolioStats, rp_balance: int = 0, cash: float = 0.0) -> str:
     achievement_count = len(stats.unlocked_achievements)
     total_achievements = len(stats.achievements)
+    net_worth = stats.total_value_usd + (cash or 0)
     lines = [
         "<b>Renaiss Portfolio</b>",
         "------------",
-        f"Portfolio Value: <b>{_format_money(stats.total_value_usd)}</b>{_change_7d_suffix(stats)}",
+        f"Net worth: <b>{_format_money(net_worth)}</b>  (cards {_format_money(stats.total_value_usd)}{_change_7d_suffix(stats)} + cash ${cash:,.0f})",
         f"RP: <b>{rp_balance:,}</b>",
         f"Renaiss Score: <b>{stats.renaiss_score}</b>",
         (
@@ -294,15 +295,17 @@ async def cmd_mycards(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if not update.effective_message:
         return
 
-    from renaiss_bot.database.queries import get_points
+    from renaiss_bot.database.queries import get_cash, get_points
 
+    uid = update.effective_user.id if update.effective_user else None
     try:
-        stats, rp_balance = await asyncio.gather(
-            get_portfolio_stats(update.effective_user.id if update.effective_user else None),
-            get_points(update.effective_user.id if update.effective_user else None),
+        stats, rp_balance, cash = await asyncio.gather(
+            get_portfolio_stats(uid),
+            get_points(uid),
+            get_cash(uid),
         )
     except Exception:
-        stats, rp_balance = None, 0
+        stats, rp_balance, cash = None, 0, 0.0
 
     if not stats:
         await update.effective_message.reply_text(
@@ -315,7 +318,7 @@ async def cmd_mycards(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     await update.effective_message.reply_text(
-        _portfolio_text(stats, rp_balance),
+        _portfolio_text(stats, rp_balance, cash),
         parse_mode="HTML",
         reply_markup=_portfolio_keyboard(),
     )

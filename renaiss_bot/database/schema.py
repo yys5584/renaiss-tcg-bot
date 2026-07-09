@@ -305,3 +305,27 @@ async def create_tables(pool: asyncpg.Pool) -> None:
             )
             """
         )
+        # 트레이딩 게임: 가상 달러($) 잔액 (페이퍼, 현금인출 없음)
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS renaiss_user_cash (
+                user_id BIGINT PRIMARY KEY,
+                cash_usd NUMERIC NOT NULL DEFAULT 0,
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+            """
+        )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS renaiss_trade_log (
+                id BIGSERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL,
+                action TEXT NOT NULL,
+                local_card_id TEXT,
+                card_name TEXT,
+                market_usd NUMERIC,
+                cash_delta NUMERIC,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+            """
+        )

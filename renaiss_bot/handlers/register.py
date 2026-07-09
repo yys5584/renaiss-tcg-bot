@@ -10,6 +10,7 @@ from renaiss_bot.handlers.drop import call_drop_handler, feed_drop_handler
 from renaiss_bot.handlers.flex import cmd_flex, on_flex_props
 from renaiss_bot.handlers.price import cmd_price
 from renaiss_bot.handlers.quiz import on_quiz_answer
+from renaiss_bot.handlers.trade import cmd_sell, on_sell
 from renaiss_bot.handlers.spawn import catch_handler
 from renaiss_bot.handlers.start import cmd_sets, cmd_start
 
@@ -23,6 +24,7 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("rank", cmd_rank))
     app.add_handler(CommandHandler("price", cmd_price))
     app.add_handler(CommandHandler("flex", cmd_flex))
+    app.add_handler(CommandHandler("sell", cmd_sell))
 
     # 시즌1식 스폰 잡기: 'c' 한 글자로 진행 중인 스폰 포획
     app.add_handler(MessageHandler(filters.Regex(r"^[cC]$"), catch_handler))
@@ -33,4 +35,5 @@ def register_handlers(app: Application) -> None:
     # 구체 패턴 콜백은 generic "renaiss:" 보다 먼저 등록해야 잡힌다.
     app.add_handler(CallbackQueryHandler(on_quiz_answer, pattern=r"^renaiss:quiz:"))
     app.add_handler(CallbackQueryHandler(on_flex_props, pattern=r"^renaiss:props:"))
+    app.add_handler(CallbackQueryHandler(on_sell, pattern=r"^renaiss:sell:"))
     app.add_handler(CallbackQueryHandler(on_callback, pattern=r"^renaiss:"))
