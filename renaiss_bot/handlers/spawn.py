@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import random
 from dataclasses import dataclass, field
 from html import escape
 from io import BytesIO
@@ -18,7 +19,7 @@ from time import monotonic
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from renaiss_bot.database.queries import get_portfolio_values, register_single_card
+from renaiss_bot.database.queries import get_portfolio_values, log_pack_event, register_single_card
 from renaiss_bot.renderers.overlay import render_overlay_card
 from renaiss_bot.services.models import RenaissPrice
 from renaiss_bot.services.spawn import Spawn, roll_spawn
@@ -27,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 CATCH_WINDOW_SECONDS = 40
 SPAWN_INTERVAL_SECONDS = 60
+REVEAL_SUSPENSE_SECONDS = 1.5
 
 
 def official_chat_id() -> int | None:
@@ -174,6 +176,15 @@ async def _resolve_job(context: ContextTypes.DEFAULT_TYPE) -> None:
                 _active.pop(chat_id, None)
 
 
+def _miss_line(catchers: dict[int, str], winner_id: int) -> str:
+    others = [name for uid, name in catchers.items() if uid != winner_id]
+    if not others:
+        return ""
+    shown = ", ".join(escape(name) for name in others[:8])
+    tail = f" +{len(others) - 8} more" if len(others) > 8 else ""
+    return f"\n😅 Missed it: {shown}{tail}"
+
+
 async def _resolve(context: ContextTypes.DEFAULT_TYPE, active: ActiveSpawn) -> None:
     spawn = active.spawn
     catchers = dict(active.catchers)
@@ -190,39 +201,54 @@ async def _resolve(context: ContextTypes.DEFAULT_TYPE, active: ActiveSpawn) -> N
             pass
         return
 
-    # 잡은 전원에게 카드 1장씩 등록 (병렬)
-    await asyncio.gather(
-        *(register_single_card(user_id=uid, category=spawn.card.category, card=spawn.card) for uid in catchers),
-        return_exceptions=True,
-    )
+    # 도전자 중 랜덤 1명 당첨 (가챠 뽑기) — 전원 획득이 아니라 "잡는 것 자체가 베팅".
+    winner_id, winner_name = random.choice(list(catchers.items()))
 
-    # 등록 후 각자 누적 시세 조회 → "이 카드 시세 + 내 누적시세" 노출 (Lv1 가치 발견)
-    totals = await get_portfolio_values(list(catchers.keys()))
+    try:
+        await context.bot.edit_message_text(
+            chat_id=active.chat_id,
+            message_id=active.message_id,
+            text=f"🎲 <b>Drawing a winner...</b> ({len(catchers)} challengers)",
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+    await asyncio.sleep(REVEAL_SUSPENSE_SECONDS)
+
+    price = RenaissPrice(
+        status="candidate",
+        source="spawn",
+        fmv_usd=spawn.market_usd or None,
+        image_url=spawn.card.image_url,
+    )
+    await register_single_card(user_id=winner_id, category=spawn.card.category, card=spawn.card)
+    await log_pack_event(
+        user_id=winner_id,
+        chat_id=active.chat_id,
+        category=spawn.card.category,
+        best_card=spawn.card,
+        price=price,
+        pack_type="spawn",
+        pack_count=1,
+        card_count=1,
+        pool_source="spawn",
+        source="spawn",
+    )
+    totals = await get_portfolio_values([winner_id])
+    total = totals.get(winner_id, 0.0)
     value = f"${spawn.market_usd:,.0f}" if spawn.market_usd >= 1 else "-"
-    catch_lines = []
-    for uid, name in list(catchers.items())[:12]:
-        total = totals.get(uid, 0.0)
-        catch_lines.append(f"· {escape(name)} → <b>${total:,.0f}</b>")
-    tail = f"\n… +{len(catchers) - 12} more" if len(catchers) > 12 else ""
     caption = (
         f"{_band_header(spawn)}\n"
         "────────────\n"
         f"<b>{escape(spawn.card.card_name)}</b> · {escape(spawn.card.grade or '-')} · {value}\n"
-        f"Caught by {len(catchers)} — new collection value:\n"
-        + "\n".join(catch_lines)
-        + tail
+        f"🏆 Caught by <b>{escape(winner_name)}</b> → new collection value: <b>${total:,.0f}</b>"
+        + _miss_line(catchers, winner_id)
     )
 
     # 그레일·레어는 슬랩 라벨 이미지로 크게, 일반은 텍스트
     image_bytes = None
     if spawn.is_headline:
         try:
-            price = RenaissPrice(
-                status="candidate",
-                source="spawn",
-                fmv_usd=spawn.market_usd or None,
-                image_url=spawn.card.image_url,
-            )
             image_bytes = await render_overlay_card(spawn.card, price)
         except Exception:
             image_bytes = None

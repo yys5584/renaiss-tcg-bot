@@ -12,6 +12,7 @@ from renaiss_bot.renderers.playwright_render import (
     resolve_image_to_data_uri,
 )
 from renaiss_bot.services.models import CardIdentity, RenaissPrice
+from renaiss_bot.services.pack_rules import normalize_grade
 
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -84,6 +85,19 @@ def _grade_text(card: CardIdentity, price: RenaissPrice) -> str:
     return upper
 
 
+_TCG_GRADE_KIND = {
+    "C": "tcg-common",
+    "U": "tcg-common",
+    "R": "tcg-uncommon",
+    "RR": "tcg-uncommon",
+    "AR": "tcg-rare",
+    "SR": "tcg-rare",
+    "SAR": "tcg-epic",
+    "UR": "tcg-legendary",
+    "MUR": "tcg-legendary",
+}
+
+
 def _grader_kind(card: CardIdentity, price: RenaissPrice) -> str:
     raw = " ".join(
         str(value or "")
@@ -99,7 +113,9 @@ def _grader_kind(card: CardIdentity, price: RenaissPrice) -> str:
         if "PRISTINE" in raw or "PERFECT" in raw:
             return "cgc-pristine"
         return "cgc"
-    return "raw"
+    # 실물 그레이딩이 없으면 뽑은 카드의 실제 TCG 등급(C~MUR)으로 화려함을 결정한다.
+    grade = normalize_grade(card.rarity or card.grade)
+    return _TCG_GRADE_KIND.get(grade, "tcg-common")
 
 
 def _style_vars(kind: str) -> dict[str, str]:
@@ -151,6 +167,57 @@ def _style_vars(kind: str) -> dict[str, str]:
             "grade_fg": "#6E551C",
             "price_bg": "#F8F5EA",
             "price_fg": "#11110E",
+        },
+        # ── TCG 등급(가챠 결과) 스타일 — 등급이 높을수록 화려하게 ──
+        "tcg-common": {
+            "outer": "#6B6B63",
+            "wrap": "#8A8A80",
+            "grade_bg": "#F1F0EC",
+            "grade_fg": "#55554D",
+            "price_bg": "#F1F0EC",
+            "price_fg": "#11110E",
+            "body_bg": "#faf9f6",
+            "glow": "none",
+        },
+        "tcg-uncommon": {
+            "outer": "#2E6B4F",
+            "wrap": "#3C8563",
+            "grade_bg": "#EFF6F1",
+            "grade_fg": "#215039",
+            "price_bg": "#EFF6F1",
+            "price_fg": "#11110E",
+            "body_bg": "#f6faf7",
+            "glow": "none",
+        },
+        "tcg-rare": {
+            "outer": "#1E4FA0",
+            "wrap": "#2E68C7",
+            "grade_bg": "#EAF1FC",
+            "grade_fg": "#173B78",
+            "price_bg": "#EAF1FC",
+            "price_fg": "#11110E",
+            "body_bg": "#f3f7fd",
+            "glow": "0 0 60px rgba(46,104,199,.25)",
+        },
+        "tcg-epic": {
+            "outer": "#7A2E9E",
+            "wrap": "#9B3FC9",
+            "grade_bg": "#F6EEFB",
+            "grade_fg": "#5C2178",
+            "price_bg": "#F6EEFB",
+            "price_fg": "#11110E",
+            "body_bg": "#faf4fd",
+            "glow": "0 0 80px rgba(155,63,201,.35)",
+        },
+        "tcg-legendary": {
+            "outer": "#C9971F",
+            "wrap": "#E8B923",
+            "grade_bg": "#FFF7E0",
+            "grade_fg": "#8A5B00",
+            "price_bg": "#FFF7E0",
+            "price_fg": "#11110E",
+            "body_bg": "#fffaf0",
+            "glow": "0 0 120px rgba(232,185,35,.45)",
         },
     }
     return styles.get(kind, styles["raw"])
@@ -286,7 +353,8 @@ body {{
   overflow: hidden;
   border: 5px solid {style["outer"]};
   border-radius: 12px;
-  background: #fbfaf5;
+  background: {style.get("body_bg", "#fbfaf5")};
+  box-shadow: {style.get("glow", "none")};
 }}
 .card-image {{
   display: block;

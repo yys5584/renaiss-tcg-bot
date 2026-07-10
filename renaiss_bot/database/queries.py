@@ -138,9 +138,9 @@ async def log_pack_event(
                 """
                 INSERT INTO renaiss_pack_events (
                     user_id, chat_id, category, pack_type, pack_count, card_count,
-                    pool_source, best_local_card_id, match_status, fmv_usd, source
+                    pool_source, best_local_card_id, match_status, fmv_usd, source, card_name
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
                 """,
                 user_id,
                 chat_id,
@@ -153,6 +153,7 @@ async def log_pack_event(
                 price.status,
                 price.fmv_usd,
                 source,
+                best_card.card_name,
             )
     except Exception as exc:
         logger.debug("Renaiss pack event log skipped: %s", exc)
@@ -579,6 +580,73 @@ async def get_portfolio_value_days_ago(user_id: int | None, *, days: int = 7) ->
     except Exception as exc:
         logger.debug("Renaiss portfolio history skipped user=%s: %s", user_id, exc)
         return None
+
+
+async def get_daily_jackpot_ranking(*, limit: int = 5) -> list[dict]:
+    """오늘(KST) 유저별 가장 비싼 단일 획득(팩/스폰) — '대박왕' 랭킹."""
+    try:
+        pool = await get_db()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                WITH todays AS (
+                    SELECT user_id, card_name, fmv_usd,
+                           ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY fmv_usd DESC) AS rn
+                    FROM renaiss_pack_events
+                    WHERE fmv_usd IS NOT NULL
+                      AND (created_at AT TIME ZONE 'Asia/Seoul')::date = $1
+                )
+                SELECT user_id, card_name, fmv_usd
+                FROM todays
+                WHERE rn = 1
+                ORDER BY fmv_usd DESC
+                LIMIT $2
+                """,
+                _today_kst(),
+                limit,
+            )
+        return [dict(row) for row in rows]
+    except Exception as exc:
+        logger.debug("Renaiss daily jackpot ranking skipped: %s", exc)
+        return []
+
+
+async def get_daily_return_ranking(*, limit: int = 5) -> list[dict]:
+    """오늘 스냅샷 vs 직전 스냅샷 대비 수익률(%) 상위 — '수익률왕' 랭킹.
+    직전 총액이 0 이하인 유저는 % 왜곡(0에서 나누기)을 막기 위해 제외한다."""
+    try:
+        pool = await get_db()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                WITH today AS (
+                    SELECT user_id, total_value_usd
+                    FROM renaiss_portfolio_snapshots
+                    WHERE snapshot_date = $1
+                ), prev AS (
+                    SELECT DISTINCT ON (user_id) user_id, total_value_usd
+                    FROM renaiss_portfolio_snapshots
+                    WHERE snapshot_date < $1
+                    ORDER BY user_id, snapshot_date DESC
+                )
+                SELECT
+                    t.user_id,
+                    t.total_value_usd AS today_usd,
+                    p.total_value_usd AS prev_usd,
+                    ((t.total_value_usd - p.total_value_usd) / p.total_value_usd * 100) AS pct
+                FROM today t
+                JOIN prev p ON p.user_id = t.user_id
+                WHERE p.total_value_usd > 0
+                ORDER BY pct DESC
+                LIMIT $2
+                """,
+                _today_kst(),
+                limit,
+            )
+        return [dict(row) for row in rows]
+    except Exception as exc:
+        logger.debug("Renaiss daily return ranking skipped: %s", exc)
+        return []
 
 
 # ── 데일리 가격 퀴즈 ─────────────────────────────────────────────

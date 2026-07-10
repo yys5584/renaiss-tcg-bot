@@ -5,8 +5,13 @@ from __future__ import annotations
 import asyncio
 import math
 from dataclasses import dataclass
+from datetime import date
 
 from renaiss_bot.database.connection import get_db
+
+# 시즌 경계는 상수로 관리 (리셋 시스템은 아직 없음) — 다음 시즌 시작 시 이 값을 갱신.
+SEASON_LABEL = "Season 1"
+SEASON_START_DATE = date(2026, 7, 1)
 
 
 @dataclass(frozen=True)
@@ -256,3 +261,15 @@ async def get_portfolio_rankings(*, limit: int = 10) -> list[dict]:
         stats["achievement_count"] = sum(1 for achievement in achievements if achievement.unlocked)
         ranked.append(stats)
     return ranked
+
+
+async def get_daily_awards(*, limit: int = 3) -> dict[str, list[dict]]:
+    """오늘(KST) 기준 다중 상: 총액왕 / 대박왕(가장 비싼 단일 획득) / 수익률왕(전일 대비 %)."""
+    from renaiss_bot.database.queries import get_daily_jackpot_ranking, get_daily_return_ranking
+
+    total, jackpot, returns = await asyncio.gather(
+        get_portfolio_rankings(limit=limit),
+        get_daily_jackpot_ranking(limit=limit),
+        get_daily_return_ranking(limit=limit),
+    )
+    return {"total": total, "jackpot": jackpot, "return": returns}

@@ -167,6 +167,18 @@ async def create_tables(pool: asyncpg.Pool) -> None:
         )
         await conn.execute(
             """
+            ALTER TABLE IF EXISTS renaiss_pack_events
+            ADD COLUMN IF NOT EXISTS card_name TEXT
+            """
+        )
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_renaiss_pack_events_user_created
+                ON renaiss_pack_events(user_id, created_at DESC)
+            """
+        )
+        await conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS renaiss_user_cards (
                 user_id BIGINT NOT NULL,
                 category TEXT NOT NULL,

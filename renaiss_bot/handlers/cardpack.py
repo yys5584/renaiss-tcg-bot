@@ -20,7 +20,13 @@ from renaiss_bot.services.pack_rules import (
     PREMIUM_PACK_RP,
     plan_pack_open,
 )
-from renaiss_bot.services.portfolio import PortfolioStats, get_portfolio_rankings, get_portfolio_stats
+from renaiss_bot.services.portfolio import (
+    SEASON_LABEL,
+    PortfolioStats,
+    get_daily_awards,
+    get_portfolio_rankings,
+    get_portfolio_stats,
+)
 
 _PACK_TYPE_ARGS = {"free", "normal", "standard", "premium", "bp", "paid"}
 _GRADE_ORDER = ("MUR", "UR", "SAR", "SR", "AR", "RR", "R", "U", "C", "-")
@@ -324,16 +330,45 @@ async def cmd_mycards(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     )
 
 
+def _daily_total_lines(rows: list[dict]) -> list[str]:
+    lines = []
+    for idx, row in enumerate(rows, 1):
+        user_id = escape(str(row.get("user_id") or "-"))
+        value = _format_money(row.get("total_value_usd"))
+        lines.append(f"{idx}. <code>{user_id}</code> — <b>{value}</b>")
+    return lines or ["No data yet."]
+
+
+def _daily_jackpot_lines(rows: list[dict]) -> list[str]:
+    lines = []
+    for idx, row in enumerate(rows, 1):
+        user_id = escape(str(row.get("user_id") or "-"))
+        card_name = escape(str(row.get("card_name") or "-"))
+        value = _format_money(row.get("fmv_usd"))
+        lines.append(f"{idx}. <code>{user_id}</code> — <b>{card_name}</b> ({value})")
+    return lines or ["No pulls yet today."]
+
+
+def _daily_return_lines(rows: list[dict]) -> list[str]:
+    lines = []
+    for idx, row in enumerate(rows, 1):
+        user_id = escape(str(row.get("user_id") or "-"))
+        pct = float(row.get("pct") or 0)
+        lines.append(f"{idx}. <code>{user_id}</code> — <b>{pct:+.1f}%</b>")
+    return lines or ["Not enough history yet."]
+
+
 async def cmd_rank(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.effective_message:
         return
 
     try:
-        rows = await get_portfolio_rankings(limit=10)
+        season_rows = await get_portfolio_rankings(limit=10)
+        awards = await get_daily_awards(limit=3)
     except Exception:
-        rows = []
+        season_rows, awards = [], {"total": [], "jackpot": [], "return": []}
 
-    if not rows:
+    if not season_rows:
         await update.effective_message.reply_text(
             "<b>Renaiss Portfolio Rank</b>\n"
             "------------\n"
@@ -342,8 +377,22 @@ async def cmd_rank(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    lines = ["<b>Renaiss Portfolio Rank</b>", "------------"]
-    for idx, row in enumerate(rows, 1):
+    lines = [
+        "<b>🏆 Today's Awards</b>",
+        "------------",
+        "💰 <b>Total King</b>",
+        *_daily_total_lines(awards["total"]),
+        "",
+        "💎 <b>Jackpot King</b> (biggest single pull today)",
+        *_daily_jackpot_lines(awards["jackpot"]),
+        "",
+        "📈 <b>Return King</b> (vs yesterday)",
+        *_daily_return_lines(awards["return"]),
+        "",
+        f"<b>{escape(SEASON_LABEL)} Total Rank</b>",
+        "------------",
+    ]
+    for idx, row in enumerate(season_rows, 1):
         user_id = escape(str(row.get("user_id") or "-"))
         value = _format_money(row.get("total_value_usd"))
         unique_cards = int(row.get("unique_cards") or 0)
