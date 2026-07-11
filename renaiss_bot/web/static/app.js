@@ -40,7 +40,7 @@
       cardOwned: "보유 ×{n}", cardMissing: "미보유", cardPublic: "공개 도감", cardArchived: "아카이브", noSet: "세트 정보 없음",
       noResults: "조건에 맞는 카드가 없습니다.", catalogPreparing: "Renaiss 카드 풀을 준비 중입니다.",
       loadFailed: "데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.", noLeaders: "이번 주 공개 포획 당첨 기록이 아직 없습니다.",
-      luckyCatches: "공개 포획 당첨", you: "나"
+      luckyCatches: "공개 포획 당첨", lbCatches: "포획", you: "나"
     },
     en: {
       skip: "Skip to content", renaissHome: "Renaiss collection home",
@@ -79,7 +79,7 @@
       cardOwned: "Owned ×{n}", cardMissing: "Missing", cardPublic: "Public collection", cardArchived: "Archived", noSet: "No set data",
       noResults: "No cards match these filters.", catalogPreparing: "The Renaiss card pool is being prepared.",
       loadFailed: "Could not load data. Please try again shortly.", noLeaders: "No public catch wins yet this week.",
-      luckyCatches: "Public catch wins", you: "You"
+      luckyCatches: "Public catch wins", lbCatches: "catches", you: "You"
     }
   };
 
@@ -413,17 +413,19 @@
     }
   }
 
-  function leaderMarkup(row, maxWins) {
-    var tier = row.rank === 1 ? " tier-gold" : row.rank === 2 ? " tier-silver" : row.rank === 3 ? " tier-bronze" : "";
-    var percent = maxWins > 0 ? Math.max(6, Math.round((row.lucky_catches / maxWins) * 100)) : 0;
+  function leaderMarkup(row) {
+    var name = String(row.display_name || "Collector");
+    var tier = row.rank === 1 ? " is-first" : row.rank === 2 ? " is-second" : row.rank === 3 ? " is-third" : "";
+    var hue = 0;
+    for (var i = 0; i < name.length; i += 1) hue = (hue + name.charCodeAt(i)) % 4;
     var value = Number(row.caught_value_usd || 0);
-    var valueLabel = value > 0
-      ? "$" + number(Math.round(value)) + " · " + t("luckyCatches")
-      : t("luckyCatches");
-    return '<article class="leader-row' + tier + (row.is_me ? " is-me" : "") + '"><span class="leader-rank">' + number(row.rank) +
-      '</span><div class="leader-name"><strong>' + escapeHTML(row.display_name) + (row.is_me ? " · " + escapeHTML(t("you")) : "") +
-      '</strong><span class="leader-bar" aria-hidden="true"><i data-percent="' + percent + '"></i></span></div>' +
-      '<div class="leader-wins"><strong>' + number(row.lucky_catches) + '</strong><span>' + escapeHTML(valueLabel) + "</span></div></article>";
+    return '<article class="lb-row' + tier + (row.is_me ? " is-me" : "") + '">' +
+      '<span class="lb-rank">' + number(row.rank) + "</span>" +
+      '<span class="lb-avatar av-' + hue + '" aria-hidden="true">' + escapeHTML(name.trim().charAt(0).toUpperCase() || "?") + "</span>" +
+      '<div class="lb-who"><strong>' + escapeHTML(name) + "</strong>" +
+      (row.is_me ? '<em class="lb-me">' + escapeHTML(t("you")) + "</em>" : "") + "</div>" +
+      '<div class="lb-score"><strong>' + number(row.lucky_catches) + '<span>' + escapeHTML(t("lbCatches")) + "</span></strong>" +
+      (value > 0 ? "<em>$" + number(Math.round(value)) + "</em>" : "") + "</div></article>";
   }
 
   async function loadLeaderboard(force) {
@@ -435,13 +437,9 @@
       var data = await response.json();
       if (!response.ok || !data.ok) throw new Error("leaderboard unavailable");
       var rows = data.rows || [];
-      var maxWins = rows.reduce(function (top, row) { return Math.max(top, Number(row.lucky_catches) || 0); }, 0);
       list.innerHTML = rows.length
-        ? rows.map(function (row) { return leaderMarkup(row, maxWins); }).join("")
+        ? rows.map(leaderMarkup).join("")
         : '<p class="state-message">' + escapeHTML(t("noLeaders")) + "</p>";
-      list.querySelectorAll(".leader-bar i").forEach(function (bar) {
-        bar.style.width = Math.min(100, Math.max(0, Number(bar.dataset.percent) || 0)) + "%";
-      });
       state.leaderboardLoaded = true;
     } catch (error) {
       list.innerHTML = '<p class="state-message">' + escapeHTML(t("loadFailed")) + "</p>";

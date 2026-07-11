@@ -359,24 +359,30 @@ select { max-width: 150px; padding: 0 28px 0 10px; }
 .page-title { margin: 2px 0 16px; }
 .page-title h1 { font-size: 1.9rem; }
 .page-title p:not(.eyebrow) { max-width: 620px; margin: 5px 0 0; color: var(--muted); font-size: 13px; font-weight: 700; }
-.leaderboard { border-top: 1px solid var(--line); }
-.leader-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px 12px 10px 8px; border-bottom: 1px solid var(--line); }
-.leader-row.is-me { background: #f2f4ff; }
-.leader-rank { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 10px; background: var(--soft); color: var(--text); font-size: 15px; font-weight: 900; }
-.leader-row.tier-gold .leader-rank { background: #f6b73c; color: #fff; }
-.leader-row.tier-silver .leader-rank { background: #aeb8c6; color: #fff; }
-.leader-row.tier-bronze .leader-rank { background: #d29b6e; color: #fff; }
-.leader-name { min-width: 0; }
-.leader-name strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
-.leader-bar { display: block; margin-top: 6px; height: 6px; border-radius: 999px; background: var(--soft); overflow: hidden; }
-.leader-bar i { display: block; height: 100%; border-radius: 999px; background: var(--brand); }
-.leader-row.tier-gold .leader-bar i { background: #f6b73c; }
-.leader-row.tier-silver .leader-bar i { background: #aeb8c6; }
-.leader-row.tier-bronze .leader-bar i { background: #d29b6e; }
-.leader-wins { text-align: right; }
-.leader-wins strong, .leader-wins span { display: block; }
-.leader-wins strong { font-size: 18px; }
-.leader-wins span { color: var(--muted); font-size: 10px; }
+.leaderboard { overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+.lb-row { display: grid; grid-template-columns: 34px 36px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px 16px 12px 12px; }
+.lb-row + .lb-row { border-top: 1px solid #f0f1f4; }
+.lb-row:hover { background: #fafbfd; }
+.lb-row.is-me { background: #f4f6ff; box-shadow: inset 3px 0 0 var(--brand); }
+.lb-rank { color: var(--muted); text-align: center; font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.lb-row.is-first .lb-rank { color: #b8860b; }
+.lb-row.is-second .lb-rank { color: #7d8794; }
+.lb-row.is-third .lb-rank { color: #a9663a; }
+.lb-avatar { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; font-size: 15px; font-weight: 900; color: #4a4b52; }
+.lb-avatar.av-0 { background: #ece9e2; }
+.lb-avatar.av-1 { background: #e3ebe4; }
+.lb-avatar.av-2 { background: #e4e9f2; }
+.lb-avatar.av-3 { background: #f0e8de; }
+.lb-row.is-first .lb-avatar { box-shadow: 0 0 0 2px #e5c159; }
+.lb-row.is-second .lb-avatar { box-shadow: 0 0 0 2px #c3ccd8; }
+.lb-row.is-third .lb-avatar { box-shadow: 0 0 0 2px #d8ab84; }
+.lb-who { min-width: 0; display: flex; align-items: center; gap: 7px; }
+.lb-who strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14.5px; font-weight: 800; }
+.lb-me { flex: 0 0 auto; padding: 2px 7px; border-radius: 999px; background: var(--brand); color: #fff; font-size: 10px; font-style: normal; font-weight: 900; }
+.lb-score { text-align: right; font-variant-numeric: tabular-nums; }
+.lb-score strong { display: block; font-size: 16px; font-weight: 900; }
+.lb-score strong span { margin-left: 4px; color: var(--muted); font-size: 10.5px; font-weight: 750; }
+.lb-score em { display: block; margin-top: 1px; color: var(--muted); font-size: 11.5px; font-style: normal; font-weight: 800; }
 .fine-print { color: var(--muted); font-size: 11px; }
 
 .command-list { border-top: 1px solid var(--line); }
@@ -450,9 +456,10 @@ footer p { margin: 0; }
   .login-card { padding: 24px 16px; }
   .login-card h1 { font-size: 1.55rem; }
   .login-notes { grid-template-columns: 1fr; }
-  .leader-row { grid-template-columns: 36px minmax(0, 1fr) auto; gap: 8px; padding: 8px 6px; }
-  .leader-rank { width: 28px; height: 28px; font-size: 13px; }
-  .leader-wins strong { font-size: 16px; }
+  .lb-row { grid-template-columns: 24px 32px minmax(0, 1fr) auto; gap: 9px; padding: 10px 12px 10px 8px; }
+  .lb-avatar { width: 32px; height: 32px; font-size: 13.5px; }
+  .lb-who strong { font-size: 13.5px; }
+  .lb-score strong { font-size: 15px; }
   .command { grid-template-columns: 78px 1fr 36px; gap: 8px; }
   .command code { font-size: 14px; }
   footer { width: calc(100% - 24px); }
