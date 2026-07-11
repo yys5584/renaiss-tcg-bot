@@ -23,11 +23,15 @@ from telegram.error import BadRequest, NetworkError, TimedOut
 from telegram.ext import ContextTypes
 
 from renaiss_bot.database.event_queries import (
+    close_spawn_session,
     event_exists,
     log_event,
     log_events,
+    record_spawn_entry,
+    record_spawn_guess,
     release_spawn_dispatch,
     reserve_spawn_dispatch,
+    save_spawn_session,
 )
 from renaiss_bot.database.market_queries import register_market_reveal
 from renaiss_bot.handlers.message_cleanup import (
@@ -610,6 +614,24 @@ async def spawn_tick(context: ContextTypes.DEFAULT_TYPE, *, burst: bool = False)
                         _active.pop(chat_id, None)
                 return
             posted_with_anchor = True
+            try:
+                await save_spawn_session(
+                    session_token=active.token,
+                    chat_id=chat_id,
+                    local_card_id=spawn.card.local_card_id or "",
+                    band=spawn.band,
+                    market_usd=spawn.market_usd,
+                    price_options=active.price_options,
+                    correct_price_index=active.correct_price_index,
+                    guess_capable=active.guess_capable,
+                    variant=active.variant,
+                    message_id=active.message_id,
+                    prompt_is_photo=active.prompt_is_photo,
+                    closes_at=datetime.now(timezone.utc)
+                    + timedelta(seconds=catch_window_seconds()),
+                )
+            except Exception as exc:
+                logger.warning("Spawn session persistence failed session=%s: %s", active.token, exc)
         except Exception as exc:
             logger.warning("Spawn post failed: %s", exc)
             async with _lock(chat_id):
@@ -767,6 +789,15 @@ async def catch_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if already_catching:
         return
 
+    try:
+        await record_spawn_entry(
+            session_token=active.token,
+            user_id=user_id,
+            display_name=_display_name(update),
+        )
+    except Exception as exc:
+        logger.warning("Spawn entry persistence failed session=%s: %s", active.token, exc)
+
     recorded = await log_events(
         [
             {
@@ -841,6 +872,15 @@ async def on_spawn_guess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await query.answer(feedback)
     if not accepted:
         return
+
+    try:
+        await record_spawn_guess(
+            session_token=active.token,
+            user_id=user.id,
+            choice_index=choice_index,
+        )
+    except Exception as exc:
+        logger.warning("Spawn guess persistence failed session=%s: %s", active.token, exc)
 
     await log_event(
         "price_guess_locked",
@@ -1080,6 +1120,11 @@ async def _resolve(context: ContextTypes.DEFAULT_TYPE, active: ActiveSpawn) -> N
     else:
         terminal_event = "spawn_reveal_failed"
         terminal_suffix = "reveal-failed"
+    try:
+        await close_spawn_session(session_token=active.token)
+    except Exception as exc:
+        logger.warning("Spawn session close failed session=%s: %s", active.token, exc)
+
     terminal_logged = await log_event(
         terminal_event,
         event_key=f"spawn:{active.token}:{terminal_suffix}",

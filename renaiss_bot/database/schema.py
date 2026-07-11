@@ -24,6 +24,32 @@ async def create_tables(pool: asyncpg.Pool) -> None:
         )
         await conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS renaiss_spawn_sessions (
+                session_token TEXT PRIMARY KEY,
+                chat_id BIGINT NOT NULL,
+                local_card_id TEXT NOT NULL,
+                band TEXT NOT NULL DEFAULT 'common',
+                market_usd DOUBLE PRECISION,
+                price_options JSONB NOT NULL DEFAULT '[]'::jsonb,
+                correct_price_index INTEGER,
+                guess_capable BOOLEAN NOT NULL DEFAULT FALSE,
+                variant TEXT,
+                message_id BIGINT,
+                prompt_is_photo BOOLEAN NOT NULL DEFAULT TRUE,
+                closes_at TIMESTAMPTZ NOT NULL,
+                state TEXT NOT NULL DEFAULT 'open',
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            );
+            CREATE INDEX IF NOT EXISTS idx_renaiss_spawn_sessions_open
+                ON renaiss_spawn_sessions(chat_id) WHERE state = 'open';
+            CREATE TABLE IF NOT EXISTS renaiss_spawn_entries (
+                session_token TEXT NOT NULL,
+                user_id BIGINT NOT NULL,
+                display_name TEXT NOT NULL DEFAULT 'Collector',
+                choice_index INTEGER,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                PRIMARY KEY (session_token, user_id)
+            );
             CREATE TABLE IF NOT EXISTS renaiss_runtime_settings (
                 key TEXT PRIMARY KEY,
                 value JSONB NOT NULL,

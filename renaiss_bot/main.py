@@ -218,9 +218,11 @@ async def _initialize_telegram_runtime(application: Application) -> None:
 
     register_jobs(application)
 
-    from renaiss_bot.jobs import recover_unfinished_spawns
+    from renaiss_bot.jobs import recover_unfinished_spawns, resume_open_spawn_sessions
 
     try:
+        # TGPoke식: 라이브 세션 테이블에서 먼저 이어하고, 남은 것은 원장 경로로.
+        await resume_open_spawn_sessions(application)
         await recover_unfinished_spawns(application)
     except Exception as exc:
         logger.critical(

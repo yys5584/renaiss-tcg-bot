@@ -396,3 +396,95 @@ async def list_spawn_round_entries(session_id: str) -> dict:
                 guesses[int(user_id)] = choice
     return {"catchers": catchers, "guesses": guesses}
 
+# ── TGPoke식 라이브 스폰 세션 저장 (이벤트 원장은 감사용으로 병행 유지) ──
+
+async def save_spawn_session(*, session_token: str, chat_id: int, local_card_id: str,
+                             band: str, market_usd: float | None, price_options: list,
+                             correct_price_index: int | None, guess_capable: bool,
+                             variant: str | None, message_id: int | None,
+                             prompt_is_photo: bool, closes_at) -> None:
+    import json as _json
+
+    pool = await get_db()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            '''
+            INSERT INTO renaiss_spawn_sessions (
+                session_token, chat_id, local_card_id, band, market_usd,
+                price_options, correct_price_index, guess_capable, variant,
+                message_id, prompt_is_photo, closes_at, state
+            ) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10,$11,$12,'open')
+            ON CONFLICT (session_token) DO NOTHING
+            ''',
+            session_token, chat_id, local_card_id, band, market_usd,
+            _json.dumps(price_options), correct_price_index, guess_capable,
+            variant, message_id, prompt_is_photo, closes_at,
+        )
+
+
+async def record_spawn_entry(*, session_token: str, user_id: int, display_name: str) -> None:
+    pool = await get_db()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            '''
+            INSERT INTO renaiss_spawn_entries (session_token, user_id, display_name)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (session_token, user_id) DO NOTHING
+            ''',
+            session_token, user_id, display_name[:64],
+        )
+
+
+async def record_spawn_guess(*, session_token: str, user_id: int, choice_index: int) -> None:
+    pool = await get_db()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            '''
+            INSERT INTO renaiss_spawn_entries (session_token, user_id, choice_index)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (session_token, user_id)
+            DO UPDATE SET choice_index = COALESCE(renaiss_spawn_entries.choice_index, EXCLUDED.choice_index)
+            ''',
+            session_token, user_id, choice_index,
+        )
+
+
+async def close_spawn_session(*, session_token: str, state: str = 'resolved') -> None:
+    pool = await get_db()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE renaiss_spawn_sessions SET state = $2 WHERE session_token = $1",
+            session_token, state,
+        )
+
+
+async def list_open_spawn_sessions() -> list[dict]:
+    import json as _json
+
+    pool = await get_db()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM renaiss_spawn_sessions WHERE state = 'open' ORDER BY created_at"
+        )
+        output = []
+        for row in rows:
+            data = dict(row)
+            options = data.get('price_options')
+            if isinstance(options, str):
+                try:
+                    data['price_options'] = _json.loads(options)
+                except ValueError:
+                    data['price_options'] = []
+            entries = await conn.fetch(
+                "SELECT user_id, display_name, choice_index FROM renaiss_spawn_entries WHERE session_token = $1",
+                data['session_token'],
+            )
+            data['catchers'] = {int(e['user_id']): str(e['display_name']) for e in entries}
+            data['guesses'] = {
+                int(e['user_id']): int(e['choice_index'])
+                for e in entries
+                if e['choice_index'] is not None
+            }
+            output.append(data)
+    return output
+

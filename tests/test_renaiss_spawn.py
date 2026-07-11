@@ -1302,3 +1302,69 @@ async def test_restart_recovery_resumes_open_round_instead_of_closing(monkeypatc
     assert scheduled and 20 <= scheduled[0][1] <= 26  # 남은 시간으로 재예약
     _active.clear()
 
+
+async def test_live_session_table_resume_and_no_double_close(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    from renaiss_bot import jobs as jobs_module
+
+    session = {
+        "session_token": "live-token",
+        "chat_id": -1001,
+        "local_card_id": "catalog:pokemon_tcg:renaiss-live",
+        "band": "common",
+        "market_usd": 20.0,
+        "price_options": [10.0, 20.0, 30.0, 40.0],
+        "correct_price_index": 1,
+        "guess_capable": True,
+        "variant": None,
+        "message_id": 91,
+        "prompt_is_photo": True,
+        "closes_at": datetime.now(timezone.utc) + timedelta(seconds=30),
+        "catchers": {9: "LiveUser"},
+        "guesses": {9: 1},
+    }
+    monkeypatch.setattr(
+        jobs_module, "list_open_spawn_sessions", AsyncMock(return_value=[session])
+    )
+    card = _card("live", 20.0)
+    monkeypatch.setattr(
+        "renaiss_bot.services.card_pool.load_catalog_card",
+        AsyncMock(return_value=card),
+    )
+    scheduled = []
+
+    class FakeQueue:
+        def run_once(self, callback, when, **kwargs):
+            scheduled.append((when, kwargs.get("name")))
+
+    _active.clear()
+    application = SimpleNamespace(job_queue=FakeQueue(), bot_data={}, bot=SimpleNamespace())
+    resumed = await jobs_module.resume_open_spawn_sessions(application)
+    assert resumed == 1
+    assert _active[-1001].token == "live-token"
+    assert _active[-1001].catchers == {9: "LiveUser"}
+    assert scheduled and 24 <= scheduled[0][0] <= 31
+
+    # 원장 경로가 같은 라운드를 다시 만나도 닫지 않는다
+    row = {
+        "posted_event_id": 1,
+        "session_id": "live-token",
+        "chat_id": -1001,
+        "metadata": {"message_id": 91},
+        "created_at": datetime.now(timezone.utc),
+        "award_user_id": None,
+        "award_metadata": None,
+    }
+    pages = [[row], []]
+
+    async def fake_list(**kwargs):
+        return pages.pop(0)
+
+    monkeypatch.setattr(jobs_module, "list_unfinished_spawns", fake_list)
+    close_edit = AsyncMock()
+    monkeypatch.setattr(jobs_module, "_edit_recovered_prompt", close_edit)
+    recovered = await jobs_module.recover_unfinished_spawns(application)
+    assert recovered == 1
+    close_edit.assert_not_awaited()
+    _active.clear()
+

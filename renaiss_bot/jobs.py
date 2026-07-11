@@ -16,7 +16,9 @@ from telegram.error import BadRequest, Forbidden, NetworkError, RetryAfter, Time
 from telegram.ext import Application, ContextTypes
 
 from renaiss_bot.database.event_queries import (
+    close_spawn_session,
     get_runtime_setting,
+    list_open_spawn_sessions,
     list_spawn_round_entries,
     list_unfinished_spawns,
     log_event,
@@ -675,6 +677,88 @@ async def _edit_recovered_prompt(application, *, chat_id: int, message_id: int, 
         )
 
 
+async def resume_open_spawn_sessions(application: Application) -> int:
+    """TGPoke식 라이브 세션 테이블에서 진행 중 라운드를 우선 복원한다."""
+    from renaiss_bot.handlers.spawn import (
+        _active as live_rounds,
+        _lock as round_lock,
+        _resolve_job,
+        rebuild_active_spawn,
+    )
+
+    try:
+        sessions = await list_open_spawn_sessions()
+    except Exception as exc:
+        logger.warning("Open spawn session scan failed: %s", exc)
+        return 0
+    resumed = 0
+    for session in sessions:
+        chat_id = int(session["chat_id"])
+        metadata = {
+            "local_card_id": session["local_card_id"],
+            "message_id": session["message_id"],
+            "band": session["band"],
+            "market_usd": session["market_usd"],
+            "price_options": session["price_options"],
+            "correct_price_index": session["correct_price_index"],
+            "guess_capable": session["guess_capable"],
+            "variant": session["variant"],
+            "prompt_is_photo": session["prompt_is_photo"],
+        }
+        try:
+            rebuilt = await rebuild_active_spawn(
+                session_id=str(session["session_token"]),
+                chat_id=chat_id,
+                metadata=metadata,
+                catchers=session["catchers"],
+                guesses=session["guesses"],
+            )
+        except Exception as exc:
+            logger.warning(
+                "Live session rebuild failed session=%s: %s",
+                session["session_token"],
+                exc,
+            )
+            rebuilt = None
+        if rebuilt is None:
+            try:
+                await close_spawn_session(
+                    session_token=str(session["session_token"]), state="cancelled"
+                )
+            except Exception:
+                pass
+            continue
+        closes_at = session["closes_at"]
+        remaining = 1.0
+        if closes_at is not None:
+            if closes_at.tzinfo is None:
+                closes_at = closes_at.replace(tzinfo=timezone.utc)
+            remaining = max(
+                1.0, (closes_at - datetime.now(timezone.utc)).total_seconds()
+            )
+        registered = False
+        async with round_lock(chat_id):
+            if live_rounds.get(chat_id) is None:
+                live_rounds[chat_id] = rebuilt
+                registered = True
+        if registered:
+            application.job_queue.run_once(
+                _resolve_job,
+                when=remaining,
+                data=chat_id,
+                name=f"renaiss_spawn_resolve_{chat_id}_{session['message_id']}",
+                job_kwargs={"misfire_grace_time": None},
+            )
+            logger.info(
+                "Live spawn session resumed session=%s remaining=%.0fs catchers=%s",
+                session["session_token"],
+                remaining,
+                len(session["catchers"]),
+            )
+            resumed += 1
+    return resumed
+
+
 async def recover_unfinished_spawns(application: Application, *, page_size: int = 50) -> int:
     """Close every orphaned prompt, failing readiness if any remain ambiguous."""
     after_id = 0
@@ -747,6 +831,13 @@ async def recover_unfinished_spawns(application: Application, *, page_size: int 
                     _resolve_job,
                     rebuild_active_spawn,
                 )
+
+                # 라이브 세션 테이블 경로가 이미 같은 라운드를 복원했다면
+                # 여기서 다시 닫지 않는다.
+                existing = live_rounds.get(int(chat_id))
+                if existing is not None and existing.token == str(session_id):
+                    recovered += 1
+                    continue
 
                 entries = await list_spawn_round_entries(str(session_id))
                 rebuilt = await rebuild_active_spawn(
