@@ -132,10 +132,10 @@ def preview_collection(user_id: int | None, **filters: Any) -> dict[str, Any]:
 
 def preview_leaderboard(current_user_id: int | None) -> dict[str, Any]:
     rows = [
-        (1, "Collector AURORA", 3),
-        (2, "Collector PAPER", 2),
-        (3, "Collector YOU", 1),
-        (3, "Collector MINT", 1),
+        (1, "아우로라", 3, 1420.0),
+        (2, "페이퍼", 2, 355.5),
+        (3, "프리뷰 수집가", 1, 96.0),
+        (3, "민트", 1, 88.0),
     ]
     return {
         "ok": True,
@@ -147,9 +147,10 @@ def preview_leaderboard(current_user_id: int | None) -> dict[str, Any]:
                 "rank": rank,
                 "display_name": name,
                 "lucky_catches": count,
-                "is_me": bool(current_user_id and name == "Collector YOU"),
+                "caught_value_usd": value,
+                "is_me": bool(current_user_id and name == "프리뷰 수집가"),
             }
-            for rank, name, count in rows
+            for rank, name, count, value in rows
         ],
         "is_preview": True,
     }

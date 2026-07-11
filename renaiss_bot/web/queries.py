@@ -438,10 +438,8 @@ async def get_weekly_lucky_leaderboard(
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            WITH summary AS (
-                SELECT
-                    user_id,
-                    COUNT(*)::int AS lucky_catches
+            WITH wins AS (
+                SELECT user_id, metadata, created_at
                 FROM public.renaiss_events
                 WHERE event_name = 'catch_won'
                   AND user_id IS NOT NULL
@@ -449,17 +447,37 @@ async def get_weekly_lucky_leaderboard(
                       date_trunc('week', now() AT TIME ZONE 'Asia/Seoul')
                       AT TIME ZONE 'Asia/Seoul'
                   )
+            ), summary AS (
+                SELECT
+                    user_id,
+                    COUNT(*)::int AS lucky_catches,
+                    COALESCE(
+                        SUM(COALESCE((metadata->>'fmv_usd')::numeric, 0)), 0
+                    )::float AS caught_value_usd
+                FROM wins
                 GROUP BY user_id
             ), ranked AS (
                 SELECT
                     user_id,
                     lucky_catches,
+                    caught_value_usd,
                     DENSE_RANK() OVER (ORDER BY lucky_catches DESC)::int AS rank
                 FROM summary
             )
-            SELECT user_id, lucky_catches, rank
-            FROM ranked
-            ORDER BY rank ASC, user_id ASC
+            SELECT
+                r.user_id,
+                r.lucky_catches,
+                r.caught_value_usd,
+                r.rank,
+                (
+                    SELECT w.metadata->>'winner_name'
+                    FROM wins w
+                    WHERE w.user_id = r.user_id
+                    ORDER BY w.created_at DESC
+                    LIMIT 1
+                ) AS winner_name
+            FROM ranked r
+            ORDER BY r.rank ASC, r.user_id ASC
             LIMIT $1
             """,
             limit,
@@ -467,11 +485,13 @@ async def get_weekly_lucky_leaderboard(
     result = []
     for row in rows:
         user_id = int(row["user_id"])
+        display_name = str(row["winner_name"] or "").strip() or collector_pseudonym(user_id)
         result.append(
             {
                 "rank": int(row["rank"] or 0),
-                "display_name": collector_pseudonym(user_id),
+                "display_name": display_name,
                 "lucky_catches": int(row["lucky_catches"] or 0),
+                "caught_value_usd": float(row["caught_value_usd"] or 0),
                 "is_me": current_user_id is not None and user_id == int(current_user_id),
             }
         )

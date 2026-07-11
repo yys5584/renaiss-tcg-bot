@@ -25,7 +25,7 @@
       loginNoteTwoTitle: "안전한 OIDC 로그인", loginNoteTwoBody: "비밀번호나 Telegram 인증 코드를 TGPoke에 입력하지 않습니다.",
       authFailed: "Telegram 로그인에 실패했습니다. 다시 시도해 주세요.", authSuccess: "Telegram 계정이 연결되었습니다.",
       archiveProgress: "이번 주 Lucky Catch", leaderboardDescription: "이번 주 공개 포획 당첨 횟수만 표시하며 매주 KST에 새로 시작합니다.",
-      loadingLeaderboard: "리더보드를 불러오는 중입니다.", leaderboardPrivacy: "동률은 같은 순위입니다. 가격, 자산, 도감 완성도와 Daily Pick 기록은 합산하지 않습니다.",
+      loadingLeaderboard: "리더보드를 불러오는 중입니다.", leaderboardPrivacy: "동률은 같은 순위입니다. 금액은 이번 주 포획 카드의 Renaiss 참고가 합산입니다.",
       botCommands: "Renaiss 봇에서 사용", commandsTitle: "명령어", commandsDescription: "게임 시작은 한 글자면 충분합니다. 누르면 명령어가 복사됩니다.",
       commandCatch: "공개 포획 참여", commandCatchHelp: "카드가 나타났을 때 랜덤 추첨과 가격 추측에 참여합니다.",
       commandCards: "내 컬렉션", commandCardsHelp: "등급과 세트별 보유 카드를 확인합니다.", commandPrice: "참고 가격",
@@ -64,7 +64,7 @@
       loginNoteTwoTitle: "Secure OIDC sign-in", loginNoteTwoBody: "You never enter a password or Telegram verification code on TGPoke.",
       authFailed: "Telegram sign-in failed. Please try again.", authSuccess: "Telegram account connected.",
       archiveProgress: "This week's Lucky Catch", leaderboardDescription: "Only public catch wins from this week are shown. The board restarts weekly in KST.",
-      loadingLeaderboard: "Loading leaderboard.", leaderboardPrivacy: "Ties share a rank. Prices, assets, completion, and Daily Pick records are never combined.",
+      loadingLeaderboard: "Loading leaderboard.", leaderboardPrivacy: "Ties share a rank. Amounts sum the Renaiss reference prices of this week's catches.",
       botCommands: "Use these in the Renaiss bot", commandsTitle: "Commands", commandsDescription: "One letter starts the game. Tap a row to copy the command.",
       commandCatch: "Join a public catch", commandCatchHelp: "Join the random draw and hidden-price guess when a card appears.",
       commandCards: "My collection", commandCardsHelp: "View cards by grade and set.", commandPrice: "Reference price",
@@ -416,10 +416,14 @@
   function leaderMarkup(row, maxWins) {
     var tier = row.rank === 1 ? " tier-gold" : row.rank === 2 ? " tier-silver" : row.rank === 3 ? " tier-bronze" : "";
     var percent = maxWins > 0 ? Math.max(6, Math.round((row.lucky_catches / maxWins) * 100)) : 0;
+    var value = Number(row.caught_value_usd || 0);
+    var valueLabel = value > 0
+      ? "$" + number(Math.round(value)) + " · " + t("luckyCatches")
+      : t("luckyCatches");
     return '<article class="leader-row' + tier + (row.is_me ? " is-me" : "") + '"><span class="leader-rank">' + number(row.rank) +
       '</span><div class="leader-name"><strong>' + escapeHTML(row.display_name) + (row.is_me ? " · " + escapeHTML(t("you")) : "") +
       '</strong><span class="leader-bar" aria-hidden="true"><i data-percent="' + percent + '"></i></span></div>' +
-      '<div class="leader-wins"><strong>' + number(row.lucky_catches) + '</strong><span>' + escapeHTML(t("luckyCatches")) + "</span></div></article>";
+      '<div class="leader-wins"><strong>' + number(row.lucky_catches) + '</strong><span>' + escapeHTML(valueLabel) + "</span></div></article>";
   }
 
   async function loadLeaderboard(force) {
