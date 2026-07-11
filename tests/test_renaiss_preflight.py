@@ -650,7 +650,7 @@ async def test_telegram_live_gate_is_read_only_and_sanitizes_success(monkeypatch
 
         async def get_chat(self, chat_id):
             self.calls.append(("get_chat", chat_id))
-            return SimpleNamespace(type="supergroup")
+            return SimpleNamespace(id=-100123456, type="supergroup")
 
         async def get_chat_member(self, chat_id, user_id):
             self.calls.append(("get_chat_member", chat_id, user_id))
@@ -663,6 +663,43 @@ async def test_telegram_live_gate_is_read_only_and_sanitizes_success(monkeypatch
     assert result.ok
     assert "test-secret" not in result.detail
     assert "plain-c" in result.detail
+
+
+async def test_telegram_live_gate_rejects_migrated_chat_id(monkeypatch):
+    monkeypatch.setenv("RENAISS_BOT_TOKEN", "123456:test-secret")
+    monkeypatch.setenv("RENAISS_EXPECTED_BOT_ID", "123456")
+    monkeypatch.setenv("RENAISS_OFFICIAL_CHAT_ID", "-5436768436")
+
+    class MigratedChatBot:
+        def __init__(self, *, token):
+            self.bot = SimpleNamespace(
+                id=123456,
+                can_read_all_group_messages=True,
+            )
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get_webhook_info(self):
+            return SimpleNamespace(url="")
+
+        async def get_chat(self, chat_id):
+            assert chat_id == -5436768436
+            return SimpleNamespace(id=-1003906603409, type="supergroup")
+
+        async def get_chat_member(self, chat_id, user_id):
+            return SimpleNamespace(status="administrator")
+
+    monkeypatch.setattr("telegram.Bot", MigratedChatBot)
+
+    result = await check_telegram_live(timeout_seconds=2)
+
+    assert not result.ok
+    assert "migrated" in result.detail
+    assert "-1003906603409" in result.detail
 
 
 async def test_telegram_live_gate_does_not_echo_provider_error(monkeypatch):
@@ -718,7 +755,7 @@ async def test_telegram_live_gate_requires_admin_for_daily_pick(monkeypatch):
             return SimpleNamespace(url="")
 
         async def get_chat(self, chat_id):
-            return SimpleNamespace(type="supergroup")
+            return SimpleNamespace(id=-100123456, type="supergroup")
 
         async def get_chat_member(self, chat_id, user_id):
             return SimpleNamespace(status="member")
@@ -753,7 +790,7 @@ async def test_telegram_live_gate_accepts_botfather_privacy_disabled(monkeypatch
             return SimpleNamespace(url="")
 
         async def get_chat(self, chat_id):
-            return SimpleNamespace(type="supergroup")
+            return SimpleNamespace(id=-100123456, type="supergroup")
 
         async def get_chat_member(self, chat_id, user_id):
             return SimpleNamespace(status="member")

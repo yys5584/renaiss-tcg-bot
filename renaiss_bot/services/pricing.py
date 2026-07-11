@@ -20,6 +20,16 @@ def _cache_timeout_seconds() -> float:
         return 0.5
 
 
+def _request_timeout_seconds() -> float:
+    try:
+        return min(
+            10.0,
+            max(1.0, float(os.getenv("RENAISS_PRICE_REQUEST_TIMEOUT_SECONDS", "4.5"))),
+        )
+    except ValueError:
+        return 4.5
+
+
 async def _store_snapshot(card: CardIdentity, price: RenaissPrice) -> None:
     try:
         from renaiss_bot.database.queries import log_price_snapshot
@@ -44,16 +54,27 @@ async def _recent_snapshot(card: CardIdentity) -> RenaissPrice | None:
         return None
 
 
-async def fetch_price(card: CardIdentity, *, timeout_seconds: float = 2.5) -> RenaissPrice:
+async def fetch_price(
+    card: CardIdentity,
+    *,
+    timeout_seconds: float | None = None,
+) -> RenaissPrice:
+    request_timeout = (
+        _request_timeout_seconds() if timeout_seconds is None else timeout_seconds
+    )
     cached = await _recent_snapshot(card)
     # Old pilot builds persisted hard-coded demo prices. Never replay them.
-    if cached is not None and not cached.source.startswith("demo"):
+    if (
+        cached is not None
+        and cached.status != "api_error"
+        and not cached.source.startswith("demo")
+    ):
         return cached
 
     try:
         official = await asyncio.wait_for(
-            fetch_official_price(card, timeout_seconds=timeout_seconds),
-            timeout=timeout_seconds + 0.5,
+            fetch_official_price(card, timeout_seconds=request_timeout),
+            timeout=request_timeout + 0.5,
         )
         if official is not None:
             await _store_snapshot(card, official)

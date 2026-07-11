@@ -1264,6 +1264,14 @@ async def check_telegram_live(*, timeout_seconds: float = 10.0) -> CheckResult:
             False,
             "official chat is not a group or supergroup",
         )
+    resolved_chat_id = int(getattr(chat, "id", 0) or 0)
+    if resolved_chat_id != chat_id:
+        return CheckResult(
+            "Telegram live",
+            False,
+            "official chat migrated; update RENAISS_OFFICIAL_CHAT_ID to "
+            f"{resolved_chat_id}",
+        )
     member_status = str(getattr(member, "status", "")).lower()
     privacy_disabled = bool(
         getattr(identity, "can_read_all_group_messages", False)
