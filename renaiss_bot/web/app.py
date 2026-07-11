@@ -201,6 +201,11 @@ def _production_startup_issues() -> list[str]:
         issues.append("Telegram OIDC is not configured")
     if _safe_telegram_url(os.getenv("RENAISS_OFFICIAL_GROUP_URL", "")) is None:
         issues.append("RENAISS_OFFICIAL_GROUP_URL must be a valid HTTPS Telegram URL")
+    expected_bot_id = os.getenv("RENAISS_EXPECTED_BOT_ID", "").strip()
+    if not expected_bot_id.isascii() or not expected_bot_id.isdecimal():
+        issues.append("RENAISS_EXPECTED_BOT_ID must be numeric")
+    elif config is not None and config.client_id != expected_bot_id:
+        issues.append("Telegram OIDC client id must match RENAISS_EXPECTED_BOT_ID")
     return issues
 
 

@@ -228,26 +228,26 @@ def test_oidc_authorization_uses_state_nonce_and_pkce(web_secret):
 
 
 def test_oidc_config_accepts_botfather_client_credentials(monkeypatch):
-    monkeypatch.setenv("RENAISS_TELEGRAM_OIDC_CLIENT_ID", "Ab12Cd34Ef")
+    monkeypatch.setenv("RENAISS_TELEGRAM_OIDC_CLIENT_ID", "8802908439")
     monkeypatch.setenv("RENAISS_TELEGRAM_OIDC_CLIENT_SECRET", "s" * 54)
     monkeypatch.setenv(
         "RENAISS_TELEGRAM_OIDC_REDIRECT_URI",
         "https://tgpoke.com/renaiss/api/auth/telegram/callback",
     )
-    # BotFather issues an OAuth client id; it is not the bot's numeric Bot API id.
     monkeypatch.setenv("RENAISS_EXPECTED_BOT_ID", "8802908439")
 
     config = oidc_config()
 
     assert config is not None
-    assert config.client_id == "Ab12Cd34Ef"
+    assert config.client_id == "8802908439"
 
 
 @pytest.mark.parametrize(
     ("client_id", "client_secret", "message"),
     [
         ("bad client", "s" * 54, "client id"),
-        ("Ab12Cd34Ef", "too-short", "client secret"),
+        ("0", "s" * 54, "client id"),
+        ("8802908439", "too-short", "client secret"),
     ],
 )
 def test_oidc_config_rejects_malformed_credentials(
@@ -365,6 +365,7 @@ def test_production_startup_fails_closed_without_oidc_or_session_secret(monkeypa
         "RENAISS_TELEGRAM_OIDC_CLIENT_ID",
         "RENAISS_TELEGRAM_OIDC_CLIENT_SECRET",
         "RENAISS_TELEGRAM_OIDC_REDIRECT_URI",
+        "RENAISS_EXPECTED_BOT_ID",
         "RENAISS_ENV_FILE",
         "RENAISS_WEB_PREVIEW",
     ):
@@ -374,6 +375,21 @@ def test_production_startup_fails_closed_without_oidc_or_session_secret(monkeypa
     assert "Telegram OIDC is not configured" in issues
     assert any("SESSION_SECRET" in issue for issue in issues)
     assert any("external web-only env" in issue for issue in issues)
+
+
+def test_production_startup_pins_oidc_client_to_expected_bot(monkeypatch):
+    monkeypatch.delenv("RENAISS_WEB_PREVIEW", raising=False)
+    monkeypatch.setenv("RENAISS_TELEGRAM_OIDC_CLIENT_ID", "8802908439")
+    monkeypatch.setenv("RENAISS_TELEGRAM_OIDC_CLIENT_SECRET", "s" * 54)
+    monkeypatch.setenv(
+        "RENAISS_TELEGRAM_OIDC_REDIRECT_URI",
+        "https://tgpoke.com/renaiss/api/auth/telegram/callback",
+    )
+    monkeypatch.setenv("RENAISS_EXPECTED_BOT_ID", "123456789")
+
+    issues = _production_startup_issues()
+
+    assert "Telegram OIDC client id must match RENAISS_EXPECTED_BOT_ID" in issues
 
 
 def test_production_startup_accepts_only_external_env_path(monkeypatch, tmp_path):

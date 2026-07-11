@@ -29,6 +29,7 @@ mock 데이터로 채우지 않는다.
 - `RENAISS_EXPECTED_DATABASE_FINGERPRINT`: `DATABASE_URL`의 host/port/database를 고정하는
   SHA-256 digest
 - `RENAISS_WEB_SESSION_SECRET`: 32자 이상의 별도 랜덤 secret
+- `RENAISS_EXPECTED_BOT_ID`: 전용 Renaiss Telegram bot의 숫자 ID
 - `RENAISS_OFFICIAL_GROUP_URL`: 사용자가 `c`를 입력할 공식 Telegram 게임방 URL
 - `RENAISS_TELEGRAM_OIDC_CLIENT_ID`
 - `RENAISS_TELEGRAM_OIDC_CLIENT_SECRET`
@@ -64,8 +65,8 @@ $env:RENAISS_ENV_FILE="$env:ProgramData\Renaiss\secrets\web.env"
 ```
 
 2026년 Telegram의 현재 로그인 계약인 OIDC Authorization Code + PKCE를 사용한다. BotFather의
-`Bot Settings > Web Login`에서 발급한 영숫자 OAuth client ID와 secret을 사용하며, Bot API의
-숫자 bot ID와 같다고 가정하지 않는다. `https://tgpoke.com`과 정확한 callback URL을 Allowed
+`Bot Settings > Web Login`에서 발급한 숫자 bot client ID와 secret을 사용한다. client ID는
+`RENAISS_EXPECTED_BOT_ID`와 일치해야 한다. `https://tgpoke.com`과 정확한 callback URL을 Allowed
 URLs로 등록한다. ID token은 Telegram JWKS의 기본 `RS256` 키, `iss`, `aud`, `iat`, `exp`, `nonce`를
 모두 검증한다. BotFather에서 다른 서명 알고리즘을 선택하면 이 서비스는 의도적으로 로그인을
 거부한다.
