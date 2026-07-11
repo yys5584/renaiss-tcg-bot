@@ -20,6 +20,8 @@ _CARDS = [
         "rarity": "Special Illustration Rare",
         "language": "English",
         "image_url": "https://images.pokemontcg.io/sv8/238_hires.png",
+        "market_price_usd": 385.0,
+        "renaiss_url": "https://index.renaissos.com/card/pokemon/surging-sparks/238-pikachu-ex",
         "source_kind": "catalog",
     },
     {
@@ -33,6 +35,7 @@ _CARDS = [
         "rarity": "Special Illustration Rare",
         "language": "English",
         "image_url": "https://images.pokemontcg.io/sv3pt5/199_hires.png",
+        "market_price_usd": 1240.0,
         "source_kind": "catalog",
     },
     {

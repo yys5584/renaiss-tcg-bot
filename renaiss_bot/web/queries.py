@@ -150,7 +150,12 @@ def _catalog_cte() -> str:
                 collector_number,
                 rarity,
                 language,
-                image_url
+                image_url,
+                market_price_usd::float AS market_price_usd,
+                CASE
+                    WHEN metadata->>'price_asset_url' LIKE 'https://%'
+                    THEN metadata->>'price_asset_url'
+                END AS renaiss_url
             FROM public.renaiss_catalog_cards
             WHERE is_active = TRUE
               AND category = 'pokemon_tcg'
@@ -170,6 +175,8 @@ def _catalog_cte() -> str:
                 m.rarity,
                 m.language,
                 m.image_url,
+                m.market_price_usd,
+                m.renaiss_url,
                 'catalog'::text AS source_kind,
                 COALESCE(owned.quantity, 0)::int AS quantity,
                 owned.updated_at AS obtained_at
@@ -207,10 +214,23 @@ def _catalog_cte() -> str:
                 COALESCE(NULLIF(uc.grade, ''), 'R'),
                 NULL::text,
                 uc.image_url,
+                COALESCE(uc.market_price_usd, retired.market_price_usd)::float,
+                retired.renaiss_url,
                 'archived'::text,
                 uc.quantity::int,
                 uc.updated_at
             FROM public.renaiss_user_cards uc
+            LEFT JOIN LATERAL (
+                SELECT
+                    c.market_price_usd::float AS market_price_usd,
+                    CASE
+                        WHEN c.metadata->>'price_asset_url' LIKE 'https://%'
+                        THEN c.metadata->>'price_asset_url'
+                    END AS renaiss_url
+                FROM public.renaiss_catalog_cards c
+                WHERE c.local_card_id = uc.local_card_id::text
+                LIMIT 1
+            ) retired ON TRUE
             WHERE $1 <> 0
               AND uc.user_id = $1
               AND uc.category = 'pokemon_tcg'
@@ -305,6 +325,8 @@ async def get_collection(
                 d.rarity,
                 d.language,
                 d.image_url,
+                d.market_price_usd,
+                d.renaiss_url,
                 d.source_kind,
                 d.quantity,
                 d.quantity > 0 AS owned,

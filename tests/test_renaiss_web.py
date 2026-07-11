@@ -73,7 +73,7 @@ async def test_preview_serves_only_prefixed_app_and_security_headers(preview_cli
     assert response.status == 200
     text = await response.text()
     assert "Renaiss" in text
-    assert "/renaiss/static/app.js?v=20260712-1" in text
+    assert "/renaiss/static/app.js?v=20260712-2" in text
     assert 'data-copy="/mycards"' in text
     assert 'data-copy="/market"' not in text
     assert response.headers["X-Content-Type-Options"] == "nosniff"
@@ -141,7 +141,9 @@ async def test_preview_login_exposes_owned_collection_and_me(preview_client):
     assert anonymous["authenticated"] is False
     assert anonymous["summary"]["catalog_total"] == 5
     assert not any(card["owned"] for card in anonymous["cards"])
-    assert all("market_price_usd" not in card for card in anonymous["cards"])
+    # 2026-07-12 정책: 카드별 Renaiss 참고가/링크는 노출한다 (자산 합산은 여전히 금지).
+    assert any(float(card.get("market_price_usd") or 0) > 0 for card in anonymous["cards"])
+    assert any(str(card.get("renaiss_url") or "").startswith("https://") for card in anonymous["cards"])
     assert all("obtained_at" not in card for card in anonymous["cards"])
 
     login = await preview_client.post("/renaiss/api/auth/preview")
@@ -582,7 +584,10 @@ async def test_production_app_startup_requires_real_catalog(monkeypatch):
 def test_web_queries_do_not_use_generic_cards_or_market_values():
     source = inspect.getsource(queries).lower()
     assert "from cards" not in source
-    assert "market_price_usd" not in source
+    # 카드별 참고가(market_price_usd) 노출은 허용하되, 유저 자산 합산은 금지한다.
+    assert "sum(market_price_usd" not in source
+    assert "sum(quantity * " not in source
+    assert "total_value" not in source
     assert "renaiss_catalog_cards" in source
     assert "renaiss_user_cards" in source
     assert "from public.renaiss_catalog_cards" in source

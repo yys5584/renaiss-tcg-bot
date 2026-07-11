@@ -21,7 +21,7 @@
       reset: "초기화", loadingCollection: "도감을 불러오는 중입니다.", loadMore: "더 보기",
       loginTitle: "Telegram으로 내 도감 연결", loginDescription: "봇에서 사용한 Telegram 계정으로 로그인하면 포획 카드와 완성률을 불러옵니다.",
       continueTelegram: "Telegram으로 계속", browseWithoutLogin: "로그인 없이 공개 도감 보기",
-      loginNoteOneTitle: "보유 여부만 연결", loginNoteOneBody: "가격·자산·지갑 잔액은 도감에 표시하지 않습니다.",
+      loginNoteOneTitle: "보유 여부만 연결", loginNoteOneBody: "지갑·자산 합산은 표시하지 않습니다. 카드에는 Renaiss 참고가만 표시됩니다.",
       loginNoteTwoTitle: "안전한 OIDC 로그인", loginNoteTwoBody: "비밀번호나 Telegram 인증 코드를 TGPoke에 입력하지 않습니다.",
       authFailed: "Telegram 로그인에 실패했습니다. 다시 시도해 주세요.", authSuccess: "Telegram 계정이 연결되었습니다.",
       archiveProgress: "이번 주 Lucky Catch", leaderboardDescription: "이번 주 공개 포획 당첨 횟수만 표시하며 매주 KST에 새로 시작합니다.",
@@ -60,7 +60,7 @@
       reset: "Reset", loadingCollection: "Loading collection.", loadMore: "Load more",
       loginTitle: "Connect your collection with Telegram", loginDescription: "Sign in with the Telegram account used in the bot to load catches and completion.",
       continueTelegram: "Continue with Telegram", browseWithoutLogin: "Browse the public collection without signing in",
-      loginNoteOneTitle: "Ownership only", loginNoteOneBody: "Prices, assets, and wallet balances never appear in the collection.",
+      loginNoteOneTitle: "Ownership only", loginNoteOneBody: "No wallet or portfolio totals — cards show the verified Renaiss reference price only.",
       loginNoteTwoTitle: "Secure OIDC sign-in", loginNoteTwoBody: "You never enter a password or Telegram verification code on TGPoke.",
       authFailed: "Telegram sign-in failed. Please try again.", authSuccess: "Telegram account connected.",
       archiveProgress: "This week's Lucky Catch", leaderboardDescription: "Only public catch wins from this week are shown. The board restarts weekly in KST.",
@@ -353,12 +353,27 @@
     var visualState = !state.user ? "is-public" : (owned ? "is-owned" : "is-missing");
     var status = archived ? t("cardArchived") : (!state.user ? t("cardPublic") : (owned ? t("cardOwned", { n: number(card.quantity) }) : t("cardMissing")));
     var meta = [card.grade, card.set_name || card.set_code, card.collector_number].filter(Boolean).join(" · ") || t("noSet");
+    if (state.page === "mycards" && card.quantity > 1) meta += " · ×" + number(card.quantity);
+    var stateRow;
+    if (state.page === "mycards") {
+      // 내 카드에서는 무의미한 상태 라벨 대신 참고가와 Renaiss 링크를 보여준다.
+      var price = Number(card.market_price_usd || 0);
+      var left = price > 0
+        ? '<strong class="card-price">$' + number(Math.round(price)) + "</strong>"
+        : "<span>" + escapeHTML(card.language || "") + "</span>";
+      var right = card.renaiss_url
+        ? '<a class="card-link" href="' + escapeHTML(card.renaiss_url) + '" target="_blank" rel="noopener">Renaiss ↗</a>'
+        : "<strong>" + escapeHTML(status) + "</strong>";
+      stateRow = '<div class="card-state">' + left + right + "</div>";
+    } else {
+      stateRow = '<div class="card-state"><span>' + escapeHTML(card.language || "") + "</span><strong>" + escapeHTML(status) + "</strong></div>";
+    }
     return '<article class="card-tile ' + visualState + (archived ? " is-archived" : "") + '">' +
       '<div class="card-art' + (image ? "" : " is-broken") + '">' +
       (image ? '<img src="' + escapeHTML(image) + '" alt="' + escapeHTML(card.card_name) + '" loading="lazy" decoding="async">' : "") +
       '<span class="card-fallback" aria-hidden="true">' + escapeHTML(String(card.card_name || "R").charAt(0)) + "</span></div>" +
       '<div class="card-body"><h2>' + escapeHTML(card.card_name || "Renaiss card") + '</h2><p class="card-meta">' + escapeHTML(meta) +
-      '</p><div class="card-state"><span>' + escapeHTML(card.language || "") + "</span><strong>" + escapeHTML(status) + "</strong></div></div></article>";
+      "</p>" + stateRow + "</div></article>";
   }
 
   function renderCards() {

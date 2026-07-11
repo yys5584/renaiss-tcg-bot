@@ -332,6 +332,9 @@ select { max-width: 150px; padding: 0 28px 0 10px; }
 .card-state strong { color: var(--text); }
 .card-tile.is-owned .card-state { border: 1px solid #bad7c4; background: #edf6f0; color: #315f45; }
 .card-tile.is-owned .card-state strong { color: #315f45; }
+.card-state .card-price { color: var(--text); font-size: 12px; font-weight: 950; }
+.card-state a.card-link { flex: 0 0 auto; color: var(--brand); font-weight: 900; text-decoration: none; }
+.card-state a.card-link:hover, .card-state a.card-link:focus-visible { text-decoration: underline; }
 .card-tile.is-archived { border-style: dashed; }
 .state-message { grid-column: 1 / -1; min-height: 180px; display: grid; place-items: center; margin: 0; color: var(--muted); text-align: center; font-size: 13px; font-weight: 850; }
 .load-more { display: flex; justify-content: center; padding-top: 14px; }
