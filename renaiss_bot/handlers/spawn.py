@@ -859,16 +859,15 @@ async def _resolve(context: ContextTypes.DEFAULT_TYPE, active: ActiveSpawn) -> N
         ]
     )
 
-    # 그레일·레어는 슬랩 라벨 이미지로 크게, 일반은 텍스트
+    # 시즌1처럼 모든 리빌은 등급 슬랩 이미지를 시도하고, 실패 시 텍스트로 폴백한다.
     image_payload = None
     render_key = overlay_cache_key(spawn.card, price)
-    if spawn.is_headline:
-        try:
-            image_payload = await get_telegram_file_id(render_key)
-            if not image_payload:
-                image_payload = await render_overlay_card(spawn.card, price)
-        except Exception:
-            image_payload = None
+    try:
+        image_payload = await get_telegram_file_id(render_key)
+        if not image_payload:
+            image_payload = await render_overlay_card(spawn.card, price)
+    except Exception:
+        image_payload = None
 
     reveal_posted = False
     reveal_delivery_unknown = False

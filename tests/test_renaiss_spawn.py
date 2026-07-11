@@ -642,9 +642,14 @@ async def test_uncaught_spawn_still_reveals_price_and_guess_results():
     class FakeBot:
         def __init__(self):
             self.edits = []
+            self.photos = []
 
         async def edit_message_text(self, **kwargs):
             self.edits.append(kwargs)
+
+        async def send_photo(self, **kwargs):
+            self.photos.append(kwargs)
+            return SimpleNamespace(photo=[])
 
     bot = FakeBot()
     card = CardIdentity(
@@ -681,12 +686,16 @@ async def test_uncaught_spawn_still_reveals_price_and_guess_results():
 
     await _resolve(SimpleNamespace(bot=bot), active)
 
-    assert len(bot.edits) == 1
-    text = bot.edits[0]["text"]
+    # Every reveal now leads with the graded slab image; text lives in the caption.
+    assert len(bot.photos) == 1
+    text = bot.photos[0]["caption"]
     assert "Renaiss reference FMV: <b>$60</b>" in text
     assert "high confidence" in text
     assert "the card got away" in text
     assert "$60 ✅" in text
+    # The original blind prompt is cleared after the photo reveal posts.
+    assert len(bot.edits) == 1
+    assert "result posted below" in bot.edits[0]["text"]
 
 
 async def test_failed_spawn_award_never_announces_collection_success(monkeypatch):
