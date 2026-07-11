@@ -234,15 +234,16 @@ live Partner API 설정을 임의로 추가하지 않는다.
 
 ### Action
 
-- Program: `C:\Windows\System32\cmd.exe`
+- Program: `<release>\.venv\Scripts\python.exe`
 - Arguments:
-  `/d /c ""<release>\renaiss_bot\start_renaiss_bot.bat""`
+  `-B -E -s -u -m renaiss_bot.tools.stream_runner --source-root "<release>" --log-path "<external-log-dir>\renaiss_bot_service.log" --max-bytes 10485760 --backups 5 --module renaiss_bot.main`
 - Start in: `<release>` 절대경로
 - action과 Start in에 Desktop, relative path, `pokemon-bot` 경로가 없음
 
-launcher가 release-local `.venv`와 외부 log directory를 선택하는지 최초 시작 로그로
-확인한다. `RENAISS_PYTHON_EXE`를 별도로 쓰는 경우에도 반드시 같은 release 전용
-interpreter의 절대경로여야 한다.
+Task가 Python을 직접 소유해야 stop 시 stream runner와 그 자식이 함께 종료된다.
+`cmd.exe` → batch → Python 액션은 Task가 `Ready`로 돌아간 뒤 Python poller가 고아로
+남을 수 있으므로 사용하지 않는다. release-local `.venv`와 외부 log directory가
+선택됐는지 최초 시작 로그로 확인한다.
 
 ### Conditions / Settings
 

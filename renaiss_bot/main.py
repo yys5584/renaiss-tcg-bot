@@ -32,10 +32,30 @@ from renaiss_bot.telegram_health import (
 logger = logging.getLogger(__name__)
 
 
+class _FdStderrHandler(logging.Handler):
+    """Write through fd 2 so the Windows service runner can capture live logs."""
+
+    terminator = "\n"
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            payload = (self.format(record) + self.terminator).encode(
+                "utf-8", errors="backslashreplace"
+            )
+            os.write(2, payload)
+        except Exception:
+            self.handleError(record)
+
+
 def _configure_logging() -> None:
+    handler = _FdStderrHandler()
+    handler.setFormatter(
+        logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    )
     logging.basicConfig(
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO),
+        handlers=[handler],
+        force=True,
     )
     for logger_name in ("httpx", "httpcore"):
         logging.getLogger(logger_name).setLevel(logging.WARNING)

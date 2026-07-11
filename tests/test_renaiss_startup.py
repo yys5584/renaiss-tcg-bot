@@ -14,6 +14,45 @@ import renaiss_bot.services.market as market_service
 from renaiss_bot.adapters.discord import main as discord_main
 
 
+def test_telegram_logging_replaces_stale_root_handlers(monkeypatch):
+    configured = {}
+    monkeypatch.setattr(
+        telegram_main.logging,
+        "basicConfig",
+        lambda **kwargs: configured.update(kwargs),
+    )
+
+    telegram_main._configure_logging()
+
+    assert configured["force"] is True
+    assert isinstance(configured["handlers"][0], telegram_main._FdStderrHandler)
+
+
+def test_fd_stderr_handler_writes_to_service_capture_fd(monkeypatch):
+    writes = []
+    monkeypatch.setattr(
+        telegram_main.os,
+        "write",
+        lambda fd, payload: writes.append((fd, payload)) or len(payload),
+    )
+    handler = telegram_main._FdStderrHandler()
+    handler.setFormatter(telegram_main.logging.Formatter("%(message)s"))
+
+    handler.emit(
+        telegram_main.logging.LogRecord(
+            "renaiss-test",
+            telegram_main.logging.INFO,
+            __file__,
+            1,
+            "service-ready",
+            (),
+            None,
+        )
+    )
+
+    assert writes == [(2, b"service-ready\n")]
+
+
 @pytest.fixture(autouse=True)
 def _disable_real_runtime_env_loading(monkeypatch):
     monkeypatch.setattr(telegram_main, "load_runtime_environment", Mock())
