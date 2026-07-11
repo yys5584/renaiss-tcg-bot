@@ -48,7 +48,8 @@ from renaiss_bot.web.queries import (
     allowed_image_hosts,
     database_role_is_read_only,
     get_collection,
-    get_weekly_lucky_leaderboard,
+    LEADERBOARD_PERIODS,
+    get_lucky_leaderboard,
 )
 
 
@@ -539,12 +540,16 @@ async def api_leaderboard(request: web.Request) -> web.Response:
     user = _request_user(request)
     user_id = int(user["id"]) if user else None
     limit = max(3, min(50, _int_query(request, "limit", 20)))
+    period = str(request.query.get("period") or "day").strip().lower()
+    if period not in LEADERBOARD_PERIODS:
+        period = "day"
     try:
         payload = (
-            preview_leaderboard(user_id)
+            preview_leaderboard(user_id, period=period)
             if request.app[PREVIEW_KEY]
             else await _run_data_query(
-                request, lambda: get_weekly_lucky_leaderboard(user_id, limit=limit)
+                request,
+                lambda: get_lucky_leaderboard(user_id, period=period, limit=limit),
             )
         )
     except web.HTTPException:

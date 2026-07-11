@@ -130,17 +130,28 @@ def preview_collection(user_id: int | None, **filters: Any) -> dict[str, Any]:
     }
 
 
-def preview_leaderboard(current_user_id: int | None) -> dict[str, Any]:
-    rows = [
-        (1, "아우로라", 3, 1420.0),
-        (2, "페이퍼", 2, 355.5),
-        (3, "프리뷰 수집가", 1, 96.0),
-        (3, "민트", 1, 88.0),
-    ]
+def preview_leaderboard(
+    current_user_id: int | None, *, period: str = "day"
+) -> dict[str, Any]:
+    if period == "all":
+        rows = [
+            (1, "아우로라", 21, 9820.0),
+            (2, "민트", 14, 4030.5),
+            (3, "페이퍼", 11, 2244.0),
+            (4, "프리뷰 수집가", 6, 780.0),
+        ]
+    else:
+        rows = [
+            (1, "아우로라", 3, 1420.0),
+            (2, "페이퍼", 2, 355.5),
+            (3, "프리뷰 수집가", 1, 96.0),
+            (3, "민트", 1, 88.0),
+        ]
     return {
         "ok": True,
         "available": True,
-        "metric": "weekly_lucky_catches",
+        "metric": "lucky_catches",
+        "period": period,
         "reset_timezone": "Asia/Seoul",
         "rows": [
             {

@@ -24,8 +24,9 @@
       loginNoteOneTitle: "보유 여부만 연결", loginNoteOneBody: "지갑·자산 합산은 표시하지 않습니다. 카드에는 Renaiss 참고가만 표시됩니다.",
       loginNoteTwoTitle: "안전한 OIDC 로그인", loginNoteTwoBody: "비밀번호나 Telegram 인증 코드를 TGPoke에 입력하지 않습니다.",
       authFailed: "Telegram 로그인에 실패했습니다. 다시 시도해 주세요.", authSuccess: "Telegram 계정이 연결되었습니다.",
-      archiveProgress: "이번 주 Lucky Catch", leaderboardDescription: "이번 주 공개 포획 당첨 횟수만 표시하며 매주 KST에 새로 시작합니다.",
-      loadingLeaderboard: "리더보드를 불러오는 중입니다.", leaderboardPrivacy: "동률은 같은 순위입니다. 금액은 이번 주 포획 카드의 Renaiss 참고가 합산입니다.",
+      archiveProgress: "Lucky Catch", leaderboardDescription: "공개 포획 당첨 랭킹입니다. 데일리는 매일 KST 자정에 새로 시작합니다.",
+      lbToday: "오늘", lbAllTime: "누적",
+      loadingLeaderboard: "리더보드를 불러오는 중입니다.", leaderboardPrivacy: "동률은 같은 순위입니다. 금액은 포획 카드의 Renaiss 참고가 합산입니다.",
       botCommands: "Renaiss 봇에서 사용", commandsTitle: "명령어", commandsDescription: "게임 시작은 한 글자면 충분합니다. 누르면 명령어가 복사됩니다.",
       commandCatch: "공개 포획 참여", commandCatchHelp: "카드가 나타났을 때 랜덤 추첨과 가격 추측에 참여합니다.",
       commandCards: "내 컬렉션", commandCardsHelp: "등급과 세트별 보유 카드를 확인합니다.", commandPrice: "참고 가격",
@@ -63,8 +64,9 @@
       loginNoteOneTitle: "Ownership only", loginNoteOneBody: "No wallet or portfolio totals — cards show the verified Renaiss reference price only.",
       loginNoteTwoTitle: "Secure OIDC sign-in", loginNoteTwoBody: "You never enter a password or Telegram verification code on TGPoke.",
       authFailed: "Telegram sign-in failed. Please try again.", authSuccess: "Telegram account connected.",
-      archiveProgress: "This week's Lucky Catch", leaderboardDescription: "Only public catch wins from this week are shown. The board restarts weekly in KST.",
-      loadingLeaderboard: "Loading leaderboard.", leaderboardPrivacy: "Ties share a rank. Amounts sum the Renaiss reference prices of this week's catches.",
+      archiveProgress: "Lucky Catch", leaderboardDescription: "Public catch-win rankings. The daily board restarts at midnight KST.",
+      lbToday: "Today", lbAllTime: "All-time",
+      loadingLeaderboard: "Loading leaderboard.", leaderboardPrivacy: "Ties share a rank. Amounts sum the Renaiss reference prices of caught cards.",
       botCommands: "Use these in the Renaiss bot", commandsTitle: "Commands", commandsDescription: "One letter starts the game. Tap a row to copy the command.",
       commandCatch: "Join a public catch", commandCatchHelp: "Join the random draw and hidden-price guess when a card appears.",
       commandCards: "My collection", commandCardsHelp: "View cards by grade and set.", commandPrice: "Reference price",
@@ -85,8 +87,8 @@
 
   var state = {
     locale: "ko", page: "pokedex", config: null, user: null, pageNumber: 1,
-    cards: [], total: 0, hasMore: false, loading: false, leaderboardLoaded: false,
-    summaryData: null, authStatus: null
+    cards: [], total: 0, hasMore: false, loading: false, leaderboardLoaded: null,
+    lbPeriod: "day", summaryData: null, authStatus: null
   };
   var searchTimer;
 
@@ -430,17 +432,23 @@
 
   async function loadLeaderboard(force) {
     var list = document.getElementById("leaderboardList");
-    if (state.leaderboardLoaded && !force) return;
+    if (state.leaderboardLoaded === state.lbPeriod && !force) return;
+    document.querySelectorAll("[data-lb-period]").forEach(function (tab) {
+      tab.classList.toggle("active", tab.dataset.lbPeriod === state.lbPeriod);
+    });
     list.innerHTML = '<p class="state-message">' + escapeHTML(t("loadingLeaderboard")) + "</p>";
     try {
-      var response = await fetch(API + "/leaderboard?limit=20", { credentials: "same-origin", cache: "no-store" });
+      var response = await fetch(
+        API + "/leaderboard?limit=20&period=" + encodeURIComponent(state.lbPeriod),
+        { credentials: "same-origin", cache: "no-store" }
+      );
       var data = await response.json();
       if (!response.ok || !data.ok) throw new Error("leaderboard unavailable");
       var rows = data.rows || [];
       list.innerHTML = rows.length
         ? rows.map(leaderMarkup).join("")
         : '<p class="state-message">' + escapeHTML(t("noLeaders")) + "</p>";
-      state.leaderboardLoaded = true;
+      state.leaderboardLoaded = state.lbPeriod;
     } catch (error) {
       list.innerHTML = '<p class="state-message">' + escapeHTML(t("loadFailed")) + "</p>";
     }
@@ -477,6 +485,13 @@
   function bind() {
     document.querySelectorAll("[data-locale]").forEach(function (button) {
       button.addEventListener("click", function () { applyLocale(button.dataset.locale, true); });
+    });
+    document.querySelectorAll("[data-lb-period]").forEach(function (tab) {
+      tab.addEventListener("click", function () {
+        if (state.lbPeriod === tab.dataset.lbPeriod) return;
+        state.lbPeriod = tab.dataset.lbPeriod;
+        loadLeaderboard(true);
+      });
     });
     document.querySelectorAll("[data-auth-action]").forEach(function (button) {
       button.addEventListener("click", function () {

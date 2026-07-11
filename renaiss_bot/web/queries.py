@@ -428,12 +428,25 @@ async def get_collection(
     }
 
 
-async def get_weekly_lucky_leaderboard(
+LEADERBOARD_PERIODS = ("day", "week", "all")
+
+
+async def get_lucky_leaderboard(
     current_user_id: int | None,
     *,
+    period: str = "day",
     limit: int = 20,
 ) -> dict[str, Any]:
+    if period not in LEADERBOARD_PERIODS:
+        period = "day"
     limit = max(3, min(50, int(limit)))
+    if period == "all":
+        since_sql = "TIMESTAMPTZ '-infinity'"
+    else:
+        since_sql = (
+            f"(date_trunc('{period}', now() AT TIME ZONE 'Asia/Seoul')"
+            " AT TIME ZONE 'Asia/Seoul')"
+        )
     pool = await get_db()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
@@ -443,10 +456,9 @@ async def get_weekly_lucky_leaderboard(
                 FROM public.renaiss_events
                 WHERE event_name = 'catch_won'
                   AND user_id IS NOT NULL
-                  AND created_at >= (
-                      date_trunc('week', now() AT TIME ZONE 'Asia/Seoul')
-                      AT TIME ZONE 'Asia/Seoul'
-                  )
+                  AND created_at >= """
+            + since_sql
+            + """
             ), summary AS (
                 SELECT
                     user_id,
@@ -498,7 +510,8 @@ async def get_weekly_lucky_leaderboard(
     return {
         "ok": True,
         "available": True,
-        "metric": "weekly_lucky_catches",
+        "metric": "lucky_catches",
+        "period": period,
         "reset_timezone": "Asia/Seoul",
         "rows": result,
     }

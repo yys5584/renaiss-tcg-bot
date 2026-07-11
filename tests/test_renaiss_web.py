@@ -73,7 +73,7 @@ async def test_preview_serves_only_prefixed_app_and_security_headers(preview_cli
     assert response.status == 200
     text = await response.text()
     assert "Renaiss" in text
-    assert "/renaiss/static/app.js?v=20260712-3" in text
+    assert "/renaiss/static/app.js?v=20260712-5" in text
     assert 'data-copy="/mycards"' in text
     assert 'data-copy="/market"' not in text
     assert response.headers["X-Content-Type-Options"] == "nosniff"
@@ -175,9 +175,22 @@ async def test_preview_login_exposes_owned_collection_and_me(preview_client):
         await preview_client.get("/renaiss/api/leaderboard")
     ).json()
     assert leaderboard["available"] is True
-    assert leaderboard["metric"] == "weekly_lucky_catches"
+    assert leaderboard["metric"] == "lucky_catches"
+    assert leaderboard["period"] == "day"
     assert all("lucky_catches" in row for row in leaderboard["rows"])
+    assert all("caught_value_usd" in row for row in leaderboard["rows"])
     assert any(row["is_me"] for row in leaderboard["rows"])
+
+    alltime = await (
+        await preview_client.get("/renaiss/api/leaderboard?period=all")
+    ).json()
+    assert alltime["period"] == "all"
+    assert alltime["rows"][0]["lucky_catches"] >= leaderboard["rows"][0]["lucky_catches"]
+
+    bogus = await (
+        await preview_client.get("/renaiss/api/leaderboard?period=DROP")
+    ).json()
+    assert bogus["period"] == "day"
 
 
 async def test_preview_health_is_explicitly_non_database(preview_client):
