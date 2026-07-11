@@ -32,6 +32,7 @@ from renaiss_bot.web.auth import (
     OIDCConfig,
     create_oidc_authorization,
     issue_session,
+    oidc_config,
     read_session,
     validate_telegram_id_token,
     verify_oidc_flow,
@@ -226,6 +227,43 @@ def test_oidc_authorization_uses_state_nonce_and_pkce(web_secret):
         verify_oidc_flow(cookie, "wrong-state", now=1_001)
 
 
+def test_oidc_config_accepts_botfather_client_credentials(monkeypatch):
+    monkeypatch.setenv("RENAISS_TELEGRAM_OIDC_CLIENT_ID", "Ab12Cd34Ef")
+    monkeypatch.setenv("RENAISS_TELEGRAM_OIDC_CLIENT_SECRET", "s" * 54)
+    monkeypatch.setenv(
+        "RENAISS_TELEGRAM_OIDC_REDIRECT_URI",
+        "https://tgpoke.com/renaiss/api/auth/telegram/callback",
+    )
+    # BotFather issues an OAuth client id; it is not the bot's numeric Bot API id.
+    monkeypatch.setenv("RENAISS_EXPECTED_BOT_ID", "8802908439")
+
+    config = oidc_config()
+
+    assert config is not None
+    assert config.client_id == "Ab12Cd34Ef"
+
+
+@pytest.mark.parametrize(
+    ("client_id", "client_secret", "message"),
+    [
+        ("bad client", "s" * 54, "client id"),
+        ("Ab12Cd34Ef", "too-short", "client secret"),
+    ],
+)
+def test_oidc_config_rejects_malformed_credentials(
+    monkeypatch, client_id, client_secret, message
+):
+    monkeypatch.setenv("RENAISS_TELEGRAM_OIDC_CLIENT_ID", client_id)
+    monkeypatch.setenv("RENAISS_TELEGRAM_OIDC_CLIENT_SECRET", client_secret)
+    monkeypatch.setenv(
+        "RENAISS_TELEGRAM_OIDC_REDIRECT_URI",
+        "https://tgpoke.com/renaiss/api/auth/telegram/callback",
+    )
+
+    with pytest.raises(AuthError, match=message):
+        oidc_config()
+
+
 def test_telegram_id_token_validates_rs256_claims_and_nonce(web_secret):
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     public_numbers = private_key.public_key().public_numbers()
@@ -327,7 +365,6 @@ def test_production_startup_fails_closed_without_oidc_or_session_secret(monkeypa
         "RENAISS_TELEGRAM_OIDC_CLIENT_ID",
         "RENAISS_TELEGRAM_OIDC_CLIENT_SECRET",
         "RENAISS_TELEGRAM_OIDC_REDIRECT_URI",
-        "RENAISS_EXPECTED_BOT_ID",
         "RENAISS_ENV_FILE",
         "RENAISS_WEB_PREVIEW",
     ):

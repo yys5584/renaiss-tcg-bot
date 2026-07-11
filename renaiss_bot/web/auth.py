@@ -7,6 +7,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 import time
 from dataclasses import dataclass
@@ -28,6 +29,7 @@ FLOW_COOKIE = "renaiss_oidc_flow"
 COOKIE_PATH = "/renaiss"
 SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60
 FLOW_MAX_AGE_SECONDS = 10 * 60
+OIDC_CLIENT_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{6,128}$")
 
 
 class AuthError(ValueError):
@@ -113,6 +115,13 @@ def oidc_config() -> OIDCConfig | None:
         return None
     if not all((client_id, client_secret, redirect_uri)):
         raise AuthError("Telegram OIDC client id, secret, and redirect URI are all required")
+    if OIDC_CLIENT_ID_PATTERN.fullmatch(client_id) is None:
+        raise AuthError("Telegram OIDC client id has an invalid format")
+    if not 32 <= len(client_secret) <= 512 or any(
+        character.isspace() or not character.isprintable()
+        for character in client_secret
+    ):
+        raise AuthError("Telegram OIDC client secret has an invalid format")
     try:
         parsed = urlparse(redirect_uri)
         port = parsed.port
