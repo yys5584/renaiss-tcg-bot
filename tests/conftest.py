@@ -139,6 +139,7 @@ async def postgres_pool(request, monkeypatch):
 
         from renaiss_bot.database.schema import create_tables
         import renaiss_bot.database.api_queries as api_queries
+        import renaiss_bot.database.catalog_queries as catalog_queries
         import renaiss_bot.database.event_queries as event_queries
         import renaiss_bot.database.market_queries as market_queries
         import renaiss_bot.database.queries as queries
@@ -152,6 +153,7 @@ async def postgres_pool(request, monkeypatch):
         monkeypatch.setattr(market_queries, "get_db", get_test_db)
         monkeypatch.setattr(api_queries, "get_db", get_test_db)
         monkeypatch.setattr(event_queries, "get_db", get_test_db)
+        monkeypatch.setattr(catalog_queries, "get_db", get_test_db)
         yield pool
     finally:
         if pool is not None:
