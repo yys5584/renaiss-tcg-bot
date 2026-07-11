@@ -298,19 +298,33 @@ def render_slab_landscape(
         width=6,
     )
     label_center_y = (_SLAB_LABEL[1] + _SLAB_LABEL[3]) // 2
-    draw.text(
-        (_SLAB_LABEL[0] + 26, label_center_y),
-        (label_name if label_name is not None else name)[:16],
-        fill=(15, 15, 15),
-        font=_font(42),
-        anchor="lm",
-    )
+    tier_font = _font(52)
+    tier_width = draw.textlength(tier_label, font=tier_font)
     draw.text(
         (_SLAB_LABEL[2] - 26, label_center_y),
         tier_label,
         fill=color,
-        font=_font(52),
+        font=tier_font,
         anchor="rm",
+    )
+    # 이름은 티어 배지와 겹치지 않게 남은 폭에 맞춰 폰트를 줄인다.
+    label_text = label_name if label_name is not None else name
+    available = (_SLAB_LABEL[2] - 26 - tier_width - 18) - (_SLAB_LABEL[0] + 26)
+    name_font = _font(42)
+    for size in range(42, 19, -2):
+        name_font = _font(size)
+        if draw.textlength(label_text, font=name_font) <= available:
+            break
+    else:
+        while label_text and draw.textlength(label_text + "…", font=name_font) > available:
+            label_text = label_text[:-1]
+        label_text += "…"
+    draw.text(
+        (_SLAB_LABEL[0] + 26, label_center_y),
+        label_text,
+        fill=(15, 15, 15),
+        font=name_font,
+        anchor="lm",
     )
     card = _load_card_image(card_image)
     if card is not None:
@@ -346,7 +360,14 @@ def render_slab_landscape(
 
     text_x = 760
     draw.text((text_x, 190), headline[:26], fill=(150, 150, 155), font=_font(44))
-    draw.text((text_x, 258), name[:20], fill=(240, 240, 238), font=_font(96))
+    # 캔버스 우측 여백(90px)을 넘지 않게 이름 폰트를 자동 축소한다.
+    name_area = LANDSCAPE_WIDTH - text_x - 90
+    headline_font = _font(96)
+    for size in range(96, 47, -4):
+        headline_font = _font(size)
+        if draw.textlength(name[:24], font=headline_font) <= name_area:
+            break
+    draw.text((text_x, 258), name[:24], fill=(240, 240, 238), font=headline_font)
     draw.text((text_x, 392), set_line[:42], fill=(150, 150, 155), font=_font(40, bold=False))
 
     badge_font = _font(64)

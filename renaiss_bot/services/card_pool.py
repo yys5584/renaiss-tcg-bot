@@ -308,6 +308,9 @@ async def _load_catalog_pool(user_id: int | None, category: str) -> tuple[list[C
                 WHERE category = $1
                   AND is_active = TRUE
                   AND grade = ANY($2::text[])
+                  -- 블라인드 "마켓" 스폰은 숨길 가격이 있어야 한다. 가격이 비면
+                  -- (예: 검증 갱신 전 seed) 갱신이 채울 때까지 풀에서 제외한다.
+                  AND market_price_usd > 0
                 ORDER BY grade DESC, card_name ASC
                 LIMIT 5000
                 """,
