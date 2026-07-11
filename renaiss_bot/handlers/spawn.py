@@ -53,6 +53,7 @@ from renaiss_bot.services.media_cache import (
 from renaiss_bot.services.models import RenaissPrice
 from renaiss_bot.services.price_evidence import catalog_reference_price
 from renaiss_bot.services.quiz import build_price_options, format_distribution, format_price_option
+from renaiss_bot.services.emoji import grade_bar, icon
 from renaiss_bot.services.spawn import Spawn, price_band, roll_spawn, tier_display
 from renaiss_bot.services.tracking import build_tracked_url
 
@@ -280,6 +281,13 @@ def _catalog_reference_price(spawn: Spawn) -> RenaissPrice:
     return catalog_reference_price(spawn.card, market_usd=spawn.market_usd or None)
 
 
+def _tier_badge(grade: str | None) -> str:
+    """TGPoke 등급 바(커스텀 이모지) + Renaiss 티어 표기."""
+    bar = grade_bar(grade)
+    label = escape(tier_display(grade))
+    return f"{bar} {label}" if bar else label
+
+
 def _identity_line(spawn: Spawn) -> str:
     card = spawn.card
     set_label = card.set_name or card.set_code or "Unknown set"
@@ -319,8 +327,8 @@ def _price_summary_line(
     if market_card_eligible(card, price):
         freshness = _freshness_text(price, now=now)
         suffix = f" · {freshness}" if freshness else ""
-        return f"💵 <b>{value}</b> ✅ Renaiss FMV{suffix}"
-    return f"💵 <b>{value}</b> · 🧪 unverified"
+        return f"{icon('coin')} <b>{value}</b> {icon('check')} Renaiss FMV{suffix}"
+    return f"{icon('coin')} <b>{value}</b> · 🧪 unverified"
 
 
 def _guess_keyboard(active: ActiveSpawn) -> InlineKeyboardMarkup | None:
@@ -344,7 +352,7 @@ def _spawn_text(active: ActiveSpawn) -> str:
         action += " Guess the price below."
     lines = [
         "🕵️ <b>BLIND MARKET SPAWN</b>",
-        f"<b>{escape(spawn.card.card_name)}</b> · {escape(tier_display(spawn.card.grade))}",
+        f"<b>{escape(spawn.card.card_name)}</b> · {_tier_badge(spawn.card.grade)}",
         _identity_line(spawn),
         action,
         f"⏳ {remaining}s · 👥 {len(active.catchers)} · 🧠 {len(active.guesses)}",
@@ -899,7 +907,7 @@ async def _resolve(context: ContextTypes.DEFAULT_TYPE, active: ActiveSpawn) -> N
         else:
             winner_id = drawn_user_id
             winner_line = (
-                f"🏆 <b>{escape(winner_name)}</b> caught it"
+                f"{icon('gotcha')} <b>{escape(winner_name)}</b> caught it"
                 + _miss_line(catchers, winner_id)
             )
     else:
@@ -909,7 +917,7 @@ async def _resolve(context: ContextTypes.DEFAULT_TYPE, active: ActiveSpawn) -> N
     caption = "\n".join(
         [
             _price_summary_line(spawn.card, price),
-            f"{band_emoji} <b>{escape(spawn.card.card_name)}</b> · {escape(tier_display(spawn.card.grade))}",
+            f"{band_emoji} <b>{escape(spawn.card.card_name)}</b> · {_tier_badge(spawn.card.grade)}",
             _identity_line(spawn),
             winner_line,
             *_guess_distribution_lines(active),

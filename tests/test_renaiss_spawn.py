@@ -585,7 +585,8 @@ def test_verified_reveal_shows_source_freshness_confidence_and_score_gate(monkey
 
     line = _price_summary_line(card, price, now=now)
 
-    assert line == "💵 <b>$430</b> ✅ Renaiss FMV · 2h ago"
+    from renaiss_bot.services.emoji import icon as _icon
+    assert line == f"{_icon('coin')} <b>$430</b> {_icon('check')} Renaiss FMV · 2h ago"
 
 
 def test_price_summary_never_renders_untrusted_partner_confidence():
@@ -610,7 +611,8 @@ def test_unverified_reveal_is_labeled_collection_only():
 
     line = _price_summary_line(card, price)
 
-    assert line == "💵 <b>$60</b> · 🧪 unverified"
+    from renaiss_bot.services.emoji import icon as _icon
+    assert line == f"{_icon('coin')} <b>$60</b> · 🧪 unverified"
 
 
 def test_unpriced_spawn_does_not_prompt_for_missing_buttons():
