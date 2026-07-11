@@ -832,10 +832,25 @@ def _miss_line(catchers: dict[int, str], winner_id: int) -> str:
     return f"\n😅 Missed: {shown}{tail}"
 
 
+async def _prefetch_reveal_image(render_key: str, spawn: Spawn, price: RenaissPrice):
+    """Resolve the reveal slab early so it renders during suspense/award time."""
+    try:
+        cached = await get_telegram_file_id(render_key)
+        if cached:
+            return cached
+        return await render_overlay_card(spawn.card, price)
+    except Exception:
+        return None
+
+
 async def _resolve(context: ContextTypes.DEFAULT_TYPE, active: ActiveSpawn) -> None:
     spawn = active.spawn
     catchers = dict(active.catchers)
     price = active.verified_price or _catalog_reference_price(spawn)
+    # The slab image only depends on card+price, never on the draw outcome, so
+    # it renders in parallel with the suspense pause and the award transaction.
+    render_key = overlay_cache_key(spawn.card, price)
+    image_task = asyncio.create_task(_prefetch_reveal_image(render_key, spawn, price))
     tracked_url = await build_tracked_url(
         price.referral_url or price.asset_url,
         user_id=None,
@@ -925,12 +940,8 @@ async def _resolve(context: ContextTypes.DEFAULT_TYPE, active: ActiveSpawn) -> N
     )
 
     # 시즌1처럼 모든 리빌은 등급 슬랩 이미지를 시도하고, 실패 시 텍스트로 폴백한다.
-    image_payload = None
-    render_key = overlay_cache_key(spawn.card, price)
     try:
-        image_payload = await get_telegram_file_id(render_key)
-        if not image_payload:
-            image_payload = await render_overlay_card(spawn.card, price)
+        image_payload = await image_task
     except Exception:
         image_payload = None
 
