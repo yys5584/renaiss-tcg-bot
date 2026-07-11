@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from html import escape
 from io import BytesIO
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, LinkPreviewOptions, Update
 from telegram.error import BadRequest, NetworkError, TimedOut
 from telegram.ext import ContextTypes
 
@@ -127,76 +128,103 @@ def _grade_line(grades: list[dict]) -> str:
             f"{escape(str(row.get('grade') or '-'))} {int(row.get('count') or 0)}"
             for row in grades[:6]
         ]
-    return ", ".join(parts) if parts else "-"
+    return " · ".join(parts) if parts else "-"
+
+
+def _card_row(idx: int, row: dict) -> str:
+    name = escape(str(row.get("card_name") or "-"))
+    grade = escape(str(row.get("grade") or "-"))
+    quantity = int(row.get("quantity") or 0)
+    quantity_text = f" ×{quantity}" if quantity > 1 else ""
+    parts = [f"{idx}. <b>{name}</b>{quantity_text} · {grade}"]
+    set_code = str(row.get("set_code") or "").strip()
+    if set_code:
+        parts.append(escape(set_code.upper()))
+    category = str(row.get("category") or "")
+    if category and category != "pokemon_tcg":
+        parts.append(escape(category.replace("_", " ").title()))
+    return " · ".join(parts)
 
 
 def _top_card_rows(rows: list[dict]) -> list[str]:
-    lines = []
-    for idx, row in enumerate(rows, 1):
-        name = escape(str(row.get("card_name") or "-"))
-        grade = escape(str(row.get("grade") or "-"))
-        category = escape(str(row.get("category") or "-"))
-        quantity = int(row.get("quantity") or 0)
-        quantity_text = f" x{quantity}" if quantity > 1 else ""
-        lines.append(f"{idx}. <b>{name}</b> {grade}{quantity_text} / <code>{category}</code>")
-    return lines
+    return [_card_row(idx, row) for idx, row in enumerate(rows, 1)]
 
 
 def _recent_card_rows(rows: list[dict]) -> list[str]:
-    lines = []
-    for idx, row in enumerate(rows, 1):
-        name = escape(str(row.get("card_name") or "-"))
-        grade = escape(str(row.get("grade") or "-"))
-        category = escape(str(row.get("category") or "-"))
-        quantity = int(row.get("quantity") or 0)
-        quantity_text = f" x{quantity}" if quantity > 1 else ""
-        lines.append(f"{idx}. <b>{name}</b> {grade}{quantity_text} / <code>{category}</code>")
-    return lines
+    return [_card_row(idx, row) for idx, row in enumerate(rows, 1)]
 
 
 def _category_rows(rows: list[dict]) -> str:
     parts = []
     for row in rows[:4]:
-        label = escape(str(row.get("category") or "-"))
+        label = escape(str(row.get("category") or "-").replace("_", " ").title())
         count = int(row.get("count") or 0)
-        parts.append(f"{label} {count} cards")
-    return ", ".join(parts) if parts else "-"
+        parts.append(f"{label} {count}")
+    return " · ".join(parts) if parts else "-"
 
 
-def _achievement_lines(stats: PortfolioStats) -> list[str]:
-    unlocked = stats.unlocked_achievements
-    if not unlocked:
-        return ["No achievements unlocked yet."]
-    return [f"- <b>{escape(item.title)}</b>" for item in unlocked[:5]]
+def _collection_web_url() -> str:
+    return os.getenv(
+        "RENAISS_COLLECTION_WEB_URL", "https://tgpoke.com/renaiss/mycards"
+    ).strip()
 
 
 def _portfolio_text(stats: PortfolioStats) -> str:
     achievement_count = len(stats.unlocked_achievements)
     total_achievements = len(stats.achievements)
-    lines = [
-        "<b>Renaiss Collection</b>",
-        "------------",
-        "In-game collection only · no physical card or NFT ownership.",
-        "",
-        "<b>Collection</b>",
-        f"Total cards: <b>{stats.total_cards}</b>",
-        f"Unique cards: <b>{stats.unique_cards}</b>",
-        f"Categories: <b>{stats.categories}</b> / Sets: <b>{stats.sets}</b>",
-        f"Category mix: {escape(_category_rows(stats.category_counts))}",
-        f"Grade mix: {escape(_grade_line(stats.grade_counts))}",
-        "",
-        f"<b>Achievements</b> {achievement_count}/{total_achievements}",
-        *_achievement_lines(stats),
-    ]
+    lines = ["🎴 <b>Renaiss Collection</b>", ""]
+
+    value = _format_money(stats.total_value_usd)
+    if value != "-":
+        pending = (
+            f" · {stats.unpriced_cards} awaiting a verified price"
+            if stats.unpriced_cards > 0
+            else ""
+        )
+        lines.append(f"💰 Est. value <b>{value}</b>{pending}")
+    lines.append(
+        f"📚 <b>{stats.total_cards}</b> cards · <b>{stats.unique_cards}</b> unique"
+        f" · <b>{stats.sets}</b> sets"
+    )
+    if stats.season_pool_total > 0:
+        percent = stats.owned_in_pool / stats.season_pool_total * 100
+        bar_filled = min(10, round(percent / 10))
+        if stats.owned_in_pool > 0:
+            bar_filled = max(1, bar_filled)
+        bar = "▰" * bar_filled + "▱" * (10 - bar_filled)
+        lines.append(
+            f"📈 Season pool {bar} <b>{stats.owned_in_pool} / {stats.season_pool_total}</b>"
+            f" ({percent:.1f}%)"
+        )
+    grade_line = _grade_line(stats.grade_counts)
+    if grade_line != "-":
+        lines.append(f"🏅 {escape(grade_line)}")
+    if len(stats.category_counts) > 1:
+        lines.append(f"🗂 {_category_rows(stats.category_counts)}")
+
+    lines.extend(["", f"🏆 <b>Achievements</b> {achievement_count}/{total_achievements}"])
+    unlocked_titles = [escape(item.title) for item in stats.unlocked_achievements[:5]]
+    if unlocked_titles:
+        lines.append("✅ " + " · ".join(unlocked_titles))
+    else:
+        lines.append("None yet — join a group spawn with <code>c</code>.")
 
     top_rows = _top_card_rows(stats.top_cards)
     if top_rows:
-        lines.extend(["", "<b>Featured Collection Cards</b>", *top_rows])
+        lines.extend(["", "⭐ <b>Top cards</b>", *top_rows])
 
     recent_rows = _recent_card_rows(stats.recent_cards)
     if recent_rows:
-        lines.extend(["", "<b>Recent Collection Adds</b>", *recent_rows])
+        lines.extend(["", "🕘 <b>Recent adds</b>", *recent_rows])
 
+    lines.extend(
+        [
+            "",
+            f'🔗 <a href="{escape(_collection_web_url(), quote=True)}">'
+            "Open the full web collection</a>",
+            "<i>In-game collection only · no physical card or NFT ownership.</i>",
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -455,4 +483,5 @@ async def cmd_mycards(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         _portfolio_text(stats),
         parse_mode="HTML",
         reply_markup=_portfolio_keyboard(),
+        link_preview_options=LinkPreviewOptions(is_disabled=True),
     )

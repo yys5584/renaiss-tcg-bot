@@ -31,6 +31,8 @@ class PortfolioStats:
     grade_counts: list[dict]
     category_counts: list[dict]
     achievements: list[Achievement]
+    season_pool_total: int = 0
+    owned_in_pool: int = 0
 
     @property
     def unlocked_achievements(self) -> list[Achievement]:
@@ -145,6 +147,32 @@ async def get_portfolio_stats(user_id: int | None, *, limit: int = 5) -> Portfol
             """,
             user_id,
         )
+        season_pool_total = int(
+            await conn.fetchval(
+                """
+                SELECT COUNT(*)::int FROM renaiss_catalog_cards
+                WHERE is_active = TRUE AND category = 'pokemon_tcg'
+                """
+            )
+            or 0
+        )
+        owned_in_pool = int(
+            await conn.fetchval(
+                """
+                SELECT COUNT(DISTINCT c.local_card_id)::int
+                FROM renaiss_catalog_cards c
+                JOIN renaiss_user_cards u
+                  ON u.local_card_id::text = c.local_card_id::text
+                 AND u.category = c.category
+                WHERE c.is_active = TRUE
+                  AND c.category = 'pokemon_tcg'
+                  AND u.user_id = $1
+                  AND u.is_tutorial IS NOT TRUE
+                """,
+                user_id,
+            )
+            or 0
+        )
 
     stats_dict = dict(summary)
     achievements = _build_achievements(stats_dict)
@@ -163,4 +191,6 @@ async def get_portfolio_stats(user_id: int | None, *, limit: int = 5) -> Portfol
         grade_counts=[dict(row) for row in grade_rows],
         category_counts=[dict(row) for row in category_rows],
         achievements=achievements,
+        season_pool_total=season_pool_total,
+        owned_in_pool=owned_in_pool,
     )
