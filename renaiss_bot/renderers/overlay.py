@@ -203,15 +203,16 @@ def _logo_svg() -> str:
 
 
 def _price_text(card: CardIdentity, price: RenaissPrice) -> str:
-    # A branded image is stronger than a caption disclaimer. Dollar headlines
-    # require the same exact/fresh/source evidence used by scored features.
-    if not market_card_eligible(card, price):
+    # 검증가는 그대로, 미검증 참고가는 ~ 접두로 추정치임을 표기한다.
+    # 가격 자체가 없으면 COLLECTION 배지를 유지한다.
+    if not price.fmv_usd or price.fmv_usd < 1:
         return "COLLECTION"
+    prefix = "" if market_card_eligible(card, price) else "~"
     if price.fmv_usd >= 1_000_000:
-        return f"${price.fmv_usd / 1_000_000:.1f}M"
+        return f"{prefix}${price.fmv_usd / 1_000_000:.1f}M"
     if price.fmv_usd >= 1000:
-        return f"${price.fmv_usd:,.0f}"
-    return f"${price.fmv_usd:,.2f}"
+        return f"{prefix}${price.fmv_usd:,.0f}"
+    return f"{prefix}${price.fmv_usd:,.2f}"
 
 
 def _grade_text(card: CardIdentity, price: RenaissPrice) -> str:

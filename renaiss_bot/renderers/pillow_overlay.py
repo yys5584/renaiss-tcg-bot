@@ -11,7 +11,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 WIDTH = 1080
 HEIGHT = 1350
-TEMPLATE_VERSION = "slab-land-v1"
+TEMPLATE_VERSION = "slab-land-v2"
 _LOGO_PNG_PATH = Path(__file__).resolve().parents[1] / "assets" / "renaiss_logo.png"
 _FONTS_DIR = Path(__file__).resolve().parents[1] / "assets" / "fonts"
 
@@ -360,15 +360,21 @@ def render_slab_landscape(
 
     text_x = 760
     draw.text((text_x, 190), headline[:26], fill=(150, 150, 155), font=_font(44))
-    # 캔버스 우측 여백(90px)을 넘지 않게 이름 폰트를 자동 축소한다.
-    name_area = LANDSCAPE_WIDTH - text_x - 90
-    headline_font = _font(96)
-    for size in range(96, 47, -4):
-        headline_font = _font(size)
-        if draw.textlength(name[:24], font=headline_font) <= name_area:
-            break
-    draw.text((text_x, 258), name[:24], fill=(240, 240, 238), font=headline_font)
-    draw.text((text_x, 392), set_line[:42], fill=(150, 150, 155), font=_font(40, bold=False))
+    # 캔버스 우측 여백(90px)을 넘지 않게 각 줄의 폰트를 자동 축소한다.
+    text_area = LANDSCAPE_WIDTH - text_x - 90
+
+    def _fit(text: str, start: int, minimum: int, *, bold: bool = True):
+        chosen = _font(start, bold=bold)
+        for size in range(start, minimum - 1, -4):
+            chosen = _font(size, bold=bold)
+            if draw.textlength(text, font=chosen) <= text_area:
+                break
+        return chosen
+
+    headline_font = _fit(name[:26], 84, 44)
+    draw.text((text_x, 262), name[:26], fill=(240, 240, 238), font=headline_font)
+    set_font = _fit(set_line[:46], 36, 24, bold=False)
+    draw.text((text_x, 396), set_line[:46], fill=(150, 150, 155), font=set_font)
 
     badge_font = _font(64)
     bounds = draw.textbbox((0, 0), tier_label, font=badge_font)

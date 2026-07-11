@@ -139,7 +139,7 @@ def test_branded_overlay_hides_unverified_collection_values():
         source_identity_key=card_identity_key(card),
     )
 
-    assert _price_text(card, candidate) == "COLLECTION"
+    assert _price_text(card, candidate).startswith("~$")  # 미검증 참고가는 추정 표기
     assert _price_text(card, exact) == "$430.00"
 
 
