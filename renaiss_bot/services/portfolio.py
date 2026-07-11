@@ -114,6 +114,7 @@ async def get_portfolio_stats(user_id: int | None, *, limit: int = 5) -> Portfol
              AND c.category = u.category
              AND c.is_active = TRUE
             WHERE u.user_id = $1 AND u.is_tutorial IS NOT TRUE
+              AND COALESCE(u.market_price_usd, c.market_price_usd, 0) > 0
             ORDER BY
                 COALESCE(u.market_price_usd, c.market_price_usd, 0) DESC,
                 CASE COALESCE(u.grade, '')
@@ -138,6 +139,7 @@ async def get_portfolio_stats(user_id: int | None, *, limit: int = 5) -> Portfol
              AND c.category = u.category
              AND c.is_active = TRUE
             WHERE u.user_id = $1
+              AND COALESCE(u.market_price_usd, c.market_price_usd, 0) > 0
             ORDER BY u.updated_at DESC
             LIMIT $2
             """,

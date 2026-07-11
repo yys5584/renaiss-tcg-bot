@@ -186,10 +186,7 @@ def _portfolio_text(stats: PortfolioStats) -> str:
 
     value = _format_money(stats.total_value_usd)
     if value != "-":
-        pending = (
-            f" <i>({stats.unpriced_cards} pending)</i>" if stats.unpriced_cards > 0 else ""
-        )
-        lines.append(f"💰 <b>Value</b>   {value}{pending}")
+        lines.append(f"💰 <b>Value</b>   {value}")
     else:
         lines.append("💰 <b>Value</b>   <i>pending — prices verify twice a day</i>")
     lines.append(
