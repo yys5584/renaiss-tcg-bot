@@ -607,6 +607,28 @@ async def publish_daily_pick_result_bell_job(context: ContextTypes.DEFAULT_TYPE)
     )
 
 
+async def _edit_recovered_prompt(application, *, chat_id: int, message_id: int, text: str) -> None:
+    """Close a prompt from a previous process; it may be a text or a photo message."""
+    try:
+        await application.bot.edit_message_text(
+            chat_id=chat_id,
+            message_id=message_id,
+            text=text,
+            parse_mode="HTML",
+            reply_markup=None,
+        )
+    except BadRequest as exc:
+        if "no text in the message" not in str(exc).lower():
+            raise
+        await application.bot.edit_message_caption(
+            chat_id=chat_id,
+            message_id=message_id,
+            caption=text,
+            parse_mode="HTML",
+            reply_markup=None,
+        )
+
+
 async def recover_unfinished_spawns(application: Application, *, page_size: int = 50) -> int:
     """Close every orphaned prompt, failing readiness if any remain ambiguous."""
     after_id = 0
@@ -635,7 +657,8 @@ async def recover_unfinished_spawns(application: Application, *, page_size: int 
                 winner_name = escape(str(award_metadata.get("winner_name") or "the winner"))
                 card_name = escape(str(award_metadata.get("card_name") or "The card"))
                 try:
-                    await application.bot.edit_message_text(
+                    await _edit_recovered_prompt(
+                        application,
                         chat_id=int(chat_id),
                         message_id=int(message_id),
                         text=(
@@ -643,8 +666,6 @@ async def recover_unfinished_spawns(application: Application, *, page_size: int 
                             f"{card_name} was already awarded to <b>{winner_name}</b> "
                             "and remains in their collection."
                         ),
-                        parse_mode="HTML",
-                        reply_markup=None,
                     )
                 except Exception as exc:
                     logger.info(
@@ -673,7 +694,8 @@ async def recover_unfinished_spawns(application: Application, *, page_size: int 
                 continue
             prompt_closed = False
             try:
-                await application.bot.edit_message_text(
+                await _edit_recovered_prompt(
+                    application,
                     chat_id=int(chat_id),
                     message_id=int(message_id),
                     text=(
@@ -681,8 +703,6 @@ async def recover_unfinished_spawns(application: Application, *, page_size: int 
                         "No collection award was recorded for this round. "
                         "No Daily Pick penalty was applied."
                     ),
-                    parse_mode="HTML",
-                    reply_markup=None,
                 )
                 prompt_closed = True
             except BadRequest as exc:

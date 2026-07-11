@@ -615,6 +615,35 @@ async def _render_overlay_card(card: CardIdentity, price: RenaissPrice) -> bytes
     return rendered
 
 
+def prompt_render_key(grade: str) -> str:
+    """Stable per-tier cache key for the blind spawn prompt image."""
+    kind = _TCG_GRADE_KIND.get(normalize_grade(grade), "tcg-common")
+    return f"spawn-prompt-v1:{kind}"
+
+
+async def render_prompt_card(grade: str) -> bytes | None:
+    """Tier-styled blind prompt: the frame reveals rarity, never the card."""
+    kind = _TCG_GRADE_KIND.get(normalize_grade(grade), "tcg-common")
+
+    def run() -> bytes:
+        return render_fixed_overlay(
+            card_image=None,
+            kind=kind,
+            style=_style_vars(kind),
+            grade_text=normalize_grade(grade),
+            price_text="???",
+            placeholder_text="?",
+        )
+
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(run), timeout=_render_total_timeout_seconds()
+        )
+    except TimeoutError:
+        logger.warning("Renaiss prompt render timed out; using text prompt")
+        return None
+
+
 async def render_overlay_card(card: CardIdentity, price: RenaissPrice) -> bytes | None:
     """Bound image download and fixed-frame composition as one unit."""
     async def run() -> bytes | None:

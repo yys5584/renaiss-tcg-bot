@@ -33,8 +33,7 @@ from renaiss_bot.handlers.spawn import (
     _first_c_feedback_users,
     _guess_distribution_lines,
     _guess_keyboard,
-    _price_evidence_lines,
-    _price_value_line,
+    _price_summary_line,
     _resolve,
     _spawning,
     _spawn_event_metadata,
@@ -491,7 +490,7 @@ def test_spawn_prompt_hides_fmv_and_value_band():
     text = _spawn_text(_active_blind_spawn())
     assert "$600" not in text
     assert "GRAIL" not in text
-    assert "hidden until reveal" in text
+    assert "Type <code>c</code> to catch!" in text
     assert "Base Set #4/102 · English" in text
 
 
@@ -523,7 +522,8 @@ def test_catch_only_assignment_suppresses_guess_ui():
     active.correct_price_index = None
 
     assert _guess_keyboard(active) is None
-    assert "Catch-only pilot round" in _spawn_text(active)
+    # Catch-only rounds show no guess CTA and no price options
+    assert "Guess the price" not in _spawn_text(active)
 
 
 def test_spawn_event_metadata_persists_assignment_and_actual_treatment():
@@ -583,17 +583,12 @@ def test_verified_reveal_shows_source_freshness_confidence_and_score_gate(monkey
         source_identity_key=card_identity_key(card),
     )
 
-    lines = _price_evidence_lines(card, price, now=now)
+    line = _price_summary_line(card, price, now=now)
 
-    assert "Renaiss OS Index" in lines[0]
-    assert "exact" in lines[0]
-    assert "high confidence" in lines[0]
-    assert "updated 2h ago" in lines[0]
-    assert "Verified for scored results" in lines[1]
-    assert _price_value_line(price) == "💵 Renaiss reference FMV: <b>$430</b>"
+    assert line == "💵 <b>$430</b> ✅ Renaiss FMV · 2h ago"
 
 
-def test_price_evidence_escapes_untrusted_partner_confidence():
+def test_price_summary_never_renders_untrusted_partner_confidence():
     card = _card("safe", 60.0)
     price = RenaissPrice(
         status="candidate",
@@ -602,23 +597,20 @@ def test_price_evidence_escapes_untrusted_partner_confidence():
         fmv_usd=60,
     )
 
-    lines = _price_evidence_lines(card, price)
+    line = _price_summary_line(card, price)
 
-    assert "<a href=" not in lines[0]
-    assert "&lt;a href=" in lines[0]
+    # The compact summary no longer surfaces the free-text confidence field.
+    assert "evil.example" not in line
+    assert "<a href=" not in line
 
 
 def test_unverified_reveal_is_labeled_collection_only():
     card = _card("sample", 60.0)
     price = RenaissPrice(status="candidate", source="sample", fmv_usd=60.0)
 
-    lines = _price_evidence_lines(card, price)
+    line = _price_summary_line(card, price)
 
-    assert "Local catalog" in lines[0]
-    assert "candidate" in lines[0]
-    assert "freshness unverified" in lines[0]
-    assert "Collection-only reference" in lines[1]
-    assert _price_value_line(price) == "💵 Collection reference value: <b>$60</b>"
+    assert line == "💵 <b>$60</b> · 🧪 unverified"
 
 
 def test_unpriced_spawn_does_not_prompt_for_missing_buttons():
@@ -689,9 +681,8 @@ async def test_uncaught_spawn_still_reveals_price_and_guess_results():
     # Every reveal now leads with the graded slab image; text lives in the caption.
     assert len(bot.photos) == 1
     text = bot.photos[0]["caption"]
-    assert "Renaiss reference FMV: <b>$60</b>" in text
-    assert "high confidence" in text
-    assert "the card got away" in text
+    assert "<b>$60</b>" in text
+    assert "Nobody caught it" in text
     assert "$60 ✅" in text
     # The original blind prompt is cleared after the photo reveal posts.
     assert len(bot.edits) == 1

@@ -31,7 +31,12 @@ from renaiss_bot.database.event_queries import (
 )
 from renaiss_bot.database.market_queries import register_market_reveal
 from renaiss_bot.database.queries import award_spawn_card, grant_first_c_starter
-from renaiss_bot.renderers.overlay import overlay_cache_key, render_overlay_card
+from renaiss_bot.renderers.overlay import (
+    overlay_cache_key,
+    prompt_render_key,
+    render_overlay_card,
+    render_prompt_card,
+)
 from renaiss_bot.services.market import (
     VERIFIED_PRICE_SOURCES,
     market_card_eligible,
@@ -216,12 +221,39 @@ class ActiveSpawn:
     variant: str | None = None
     closing: bool = False
     telemetry_failure_count: int = 0
+    prompt_is_photo: bool = False
 
 
 _active: dict[int, ActiveSpawn] = {}
 _locks: dict[int, asyncio.Lock] = {}
 _spawning: set[int] = set()
 _first_c_feedback_users: set[int] = set()
+
+
+async def _edit_prompt_message(
+    context: ContextTypes.DEFAULT_TYPE,
+    active: "ActiveSpawn",
+    *,
+    text: str,
+    reply_markup=None,
+) -> None:
+    """Edit the live prompt whether it was posted as a photo or as text."""
+    if active.prompt_is_photo:
+        await context.bot.edit_message_caption(
+            chat_id=active.chat_id,
+            message_id=active.message_id,
+            caption=text,
+            parse_mode="HTML",
+            reply_markup=reply_markup,
+        )
+    else:
+        await context.bot.edit_message_text(
+            chat_id=active.chat_id,
+            message_id=active.message_id,
+            text=text,
+            parse_mode="HTML",
+            reply_markup=reply_markup,
+        )
 
 
 def _lock(chat_id: int) -> asyncio.Lock:
@@ -246,64 +278,44 @@ def _catalog_reference_price(spawn: Spawn) -> RenaissPrice:
 def _identity_line(spawn: Spawn) -> str:
     card = spawn.card
     set_label = card.set_name or card.set_code or "Unknown set"
+    # 프로모 세트명은 문장 수준으로 길어질 수 있어 한 줄 가독성을 위해 자른다.
+    if len(set_label) > 28:
+        set_label = set_label[:27].rstrip() + "…"
     number = f" #{card.collector_number}" if card.collector_number else ""
     language = f" · {card.language}" if card.language else ""
     return f"{escape(set_label)}{escape(number)}{escape(language)}"
 
 
-def _price_value_line(price: RenaissPrice) -> str:
-    value = f"${float(price.fmv_usd):,.0f}" if price.fmv_usd and price.fmv_usd >= 1 else "-"
-    is_renaiss = price.status == "exact" and price.source in VERIFIED_PRICE_SOURCES
-    label = "Renaiss reference FMV" if is_renaiss else "Collection reference value"
-    return f"💵 {label}: <b>{value}</b>"
+def _freshness_text(price: RenaissPrice, *, now: datetime | None = None) -> str | None:
+    if price.status != "exact" or price.source not in VERIFIED_PRICE_SOURCES:
+        return None
+    updated = price.price_updated_at
+    if updated is None:
+        return None
+    if updated.tzinfo is None:
+        updated = updated.replace(tzinfo=timezone.utc)
+    current = now or datetime.now(timezone.utc)
+    age_seconds = max(0, int((current - updated.astimezone(timezone.utc)).total_seconds()))
+    if age_seconds < 3600:
+        return f"{age_seconds // 60}m ago"
+    if age_seconds < 86400:
+        return f"{age_seconds // 3600}h ago"
+    return f"{age_seconds // 86400}d ago"
 
 
-def _price_evidence_lines(
+def _price_summary_line(
     card,
     price: RenaissPrice,
     *,
     now: datetime | None = None,
-) -> list[str]:
-    current = now or datetime.now(timezone.utc)
-    source_label = (
-        "Renaiss OS Index"
-        if price.source in VERIFIED_PRICE_SOURCES
-        else "Local catalog"
-    )
-    status = price.status
-    confidence = (
-        f" · {escape(str(price.confidence))} confidence"
-        if price.confidence
-        else ""
-    )
-    freshness = "freshness unverified"
-    if price.status == "exact" and price.source in VERIFIED_PRICE_SOURCES:
-        updated = price.price_updated_at
-        if updated is not None and updated.tzinfo is None:
-            updated = updated.replace(tzinfo=timezone.utc)
-        if updated is not None:
-            age_seconds = max(0, int((current - updated.astimezone(timezone.utc)).total_seconds()))
-            if age_seconds < 3600:
-                freshness = f"updated {age_seconds // 60}m ago"
-            elif age_seconds < 86400:
-                freshness = f"updated {age_seconds // 3600}h ago"
-            else:
-                freshness = f"updated {age_seconds // 86400}d ago"
-    evidence = f"🔎 {source_label} · {status}{confidence} · {freshness}"
-    gate = (
-        "✅ Verified for scored results"
-        if market_card_eligible(card, price)
-        else "🧪 Collection-only reference · excluded from scored results"
-    )
-    return [evidence, gate]
-
-
-def _band_header(spawn: Spawn) -> str:
-    if spawn.band == "grail":
-        return "🔥 <b>GRAIL SPAWN</b> — everyone grab it!"
-    if spawn.band == "rare":
-        return "💎 <b>Rare spawn</b> approaching!"
-    return "✨ A card appeared!"
+) -> str:
+    """One compact line: value plus its trust level."""
+    value = f"${float(price.fmv_usd):,.0f}" if price.fmv_usd and price.fmv_usd >= 1 else "-"
+    if market_card_eligible(card, price):
+        freshness = _freshness_text(price, now=now)
+        suffix = f" · {freshness}" if freshness else ""
+        return f"💵 <b>{value}</b> ✅ Renaiss FMV{suffix}"
+    return f"💵 <b>{value}</b> · 🧪 unverified"
 
 
 def _guess_keyboard(active: ActiveSpawn) -> InlineKeyboardMarkup | None:
@@ -324,21 +336,13 @@ def _spawn_text(active: ActiveSpawn) -> str:
     remaining = max(0, catch_window_seconds() - int(monotonic() - active.started_at))
     action = "Type <code>c</code> to catch!"
     if active.price_options:
-        action += " Then guess the market price below."
-    if active.variant == "catch-only":
-        price_line = "🔒 Catch-only pilot round · verified reference appears at reveal."
-    elif active.price_options:
-        price_line = "🔒 Verified Renaiss reference FMV is hidden until reveal."
-    else:
-        price_line = "🧪 Verified FMV guess unavailable — collection catch only."
+        action += " Guess the price below."
     lines = [
         "🕵️ <b>BLIND MARKET SPAWN</b>",
         f"<b>{escape(spawn.card.card_name)}</b> · {escape(spawn.card.grade or '-')}",
         _identity_line(spawn),
-        price_line,
-        "",
         action,
-        f"⏳ {remaining}s left · 👥 {len(active.catchers)} catching · 🧠 {len(active.guesses)} guessed",
+        f"⏳ {remaining}s · 👥 {len(active.catchers)} · 🧠 {len(active.guesses)}",
     ]
     return "\n".join(lines)
 
@@ -461,12 +465,43 @@ async def spawn_tick(context: ContextTypes.DEFAULT_TYPE, *, burst: bool = False)
             _active[chat_id] = active
 
         try:
-            message = await context.bot.send_message(
-                chat_id=chat_id,
-                text=_spawn_text(active),
-                parse_mode="HTML",
-                reply_markup=_guess_keyboard(active),
-            )
+            # 등급(가격대)별 블라인드 프레임 이미지를 우선 시도하고, 실패 시 텍스트 프롬프트.
+            message = None
+            try:
+                prompt_key = prompt_render_key(spawn.card.grade or "R")
+                prompt_payload = await get_telegram_file_id(prompt_key)
+                if not prompt_payload:
+                    prompt_payload = await render_prompt_card(spawn.card.grade or "R")
+                if prompt_payload:
+                    if isinstance(prompt_payload, bytes):
+                        prompt_photo = BytesIO(prompt_payload)
+                        prompt_photo.name = "renaiss_spawn_prompt.png"
+                    else:
+                        prompt_photo = prompt_payload
+                    message = await context.bot.send_photo(
+                        chat_id=chat_id,
+                        photo=prompt_photo,
+                        caption=_spawn_text(active),
+                        parse_mode="HTML",
+                        reply_markup=_guess_keyboard(active),
+                    )
+                    active.prompt_is_photo = True
+                    if isinstance(prompt_payload, bytes):
+                        await remember_telegram_photo(prompt_key, message)
+            except BadRequest:
+                if isinstance(prompt_payload, str):
+                    await delete_telegram_file_id(prompt_key)
+                message = None
+            except Exception:
+                message = None
+            if message is None:
+                active.prompt_is_photo = False
+                message = await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=_spawn_text(active),
+                    parse_mode="HTML",
+                    reply_markup=_guess_keyboard(active),
+                )
             active.message_id = message.message_id
             posted_logged = await log_event(
                 "spawn_posted",
@@ -483,11 +518,10 @@ async def spawn_tick(context: ContextTypes.DEFAULT_TYPE, *, burst: bool = False)
                     active.token,
                 )
                 try:
-                    await context.bot.edit_message_text(
-                        chat_id=chat_id,
-                        message_id=active.message_id,
+                    await _edit_prompt_message(
+                        context,
+                        active,
                         text="This round was cancelled before entries opened. Watch for the next spawn.",
-                        reply_markup=None,
                     )
                 except Exception:
                     logger.warning(
@@ -577,11 +611,10 @@ async def catch_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 refresh_message_id = None
         if refresh_message_id is not None:
             try:
-                await context.bot.edit_message_text(
-                    chat_id=chat_id,
-                    message_id=refresh_message_id,
+                await _edit_prompt_message(
+                    context,
+                    refresh_active,
                     text=refresh_text,
-                    parse_mode="HTML",
                     reply_markup=refresh_keyboard,
                 )
             except Exception:
@@ -723,11 +756,10 @@ async def on_spawn_guess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         if _active.get(chat.id) is not active or active.closing:
             return
         try:
-            await context.bot.edit_message_text(
-                chat_id=chat.id,
-                message_id=active.message_id,
+            await _edit_prompt_message(
+                context,
+                active,
                 text=_spawn_text(active),
-                parse_mode="HTML",
                 reply_markup=_guess_keyboard(active),
             )
         except Exception:
@@ -755,16 +787,15 @@ def _miss_line(catchers: dict[int, str], winner_id: int) -> str:
     others = [name for uid, name in catchers.items() if uid != winner_id]
     if not others:
         return ""
-    shown = ", ".join(escape(name) for name in others[:8])
-    tail = f" +{len(others) - 8} more" if len(others) > 8 else ""
-    return f"\n😅 Missed it: {shown}{tail}"
+    shown = ", ".join(escape(name) for name in others[:6])
+    tail = f" +{len(others) - 6}" if len(others) > 6 else ""
+    return f"\n😅 Missed: {shown}{tail}"
 
 
 async def _resolve(context: ContextTypes.DEFAULT_TYPE, active: ActiveSpawn) -> None:
     spawn = active.spawn
     catchers = dict(active.catchers)
     price = active.verified_price or _catalog_reference_price(spawn)
-    verified = market_card_eligible(spawn.card, price)
     tracked_url = await build_tracked_url(
         price.referral_url or price.asset_url,
         user_id=None,
@@ -786,12 +817,10 @@ async def _resolve(context: ContextTypes.DEFAULT_TYPE, active: ActiveSpawn) -> N
         # 도전자 중 랜덤 1명 당첨 (가챠 뽑기) — 전원 획득이 아니라 "잡는 것 자체가 베팅".
         drawn_user_id, winner_name = random.choice(list(catchers.items()))
         try:
-            await context.bot.edit_message_text(
-                chat_id=active.chat_id,
-                message_id=active.message_id,
+            await _edit_prompt_message(
+                context,
+                active,
                 text=f"🎲 <b>Drawing a winner...</b> ({len(catchers)} challengers)",
-                parse_mode="HTML",
-                reply_markup=None,
             )
         except Exception:
             pass
@@ -838,23 +867,19 @@ async def _resolve(context: ContextTypes.DEFAULT_TYPE, active: ActiveSpawn) -> N
         else:
             winner_id = drawn_user_id
             winner_line = (
-                f"🏆 Caught by <b>{escape(winner_name)}</b> · added to their in-game collection"
+                f"🏆 <b>{escape(winner_name)}</b> caught it"
                 + _miss_line(catchers, winner_id)
             )
     else:
-        winner_line = "💨 Nobody entered the catch — the card got away."
+        winner_line = "💨 Nobody caught it."
 
-    evidence_lines = _price_evidence_lines(spawn.card, price)
+    band_emoji = {"grail": "🔥", "rare": "💎"}.get(spawn.band, "✨")
     caption = "\n".join(
         [
-            _band_header(spawn) if verified else "✨ <b>CARD REVEAL</b>",
-            "────────────",
-            f"<b>{escape(spawn.card.card_name)}</b> · {escape(spawn.card.grade or '-')}",
+            _price_summary_line(spawn.card, price),
+            f"{band_emoji} <b>{escape(spawn.card.card_name)}</b> · {escape(spawn.card.grade or '-')}",
             _identity_line(spawn),
-            _price_value_line(price),
-            *evidence_lines,
             winner_line,
-            "In-game collectible only · no physical card or NFT ownership.",
             *_guess_distribution_lines(active),
         ]
     )
@@ -901,11 +926,10 @@ async def _resolve(context: ContextTypes.DEFAULT_TYPE, active: ActiveSpawn) -> N
             logger.error("Spawn photo reveal failed ambiguously session=%s: %s", active.token, exc)
     if not reveal_posted and not reveal_delivery_unknown:
         try:
-            await context.bot.edit_message_text(
-                chat_id=active.chat_id,
-                message_id=active.message_id,
+            await _edit_prompt_message(
+                context,
+                active,
                 text=caption,
-                parse_mode="HTML",
                 reply_markup=result_keyboard,
             )
             reveal_posted = True
@@ -977,12 +1001,10 @@ async def _clear_prompt(
 ) -> None:
     try:
         outcome = "caught" if caught else "revealed"
-        await context.bot.edit_message_text(
-            chat_id=active.chat_id,
-            message_id=active.message_id,
+        await _edit_prompt_message(
+            context,
+            active,
             text=f"✅ <b>{escape(active.spawn.card.card_name)}</b> {outcome} — result posted below.",
-            parse_mode="HTML",
-            reply_markup=None,
         )
     except Exception:
         pass
