@@ -68,30 +68,35 @@ async def get_portfolio_stats(user_id: int | None, *, limit: int = 5) -> Portfol
         summary = await conn.fetchrow(
             """
             SELECT
-                COUNT(*) FILTER (WHERE is_tutorial IS NOT TRUE)::int AS unique_cards,
-                COALESCE(SUM(quantity) FILTER (WHERE is_tutorial IS NOT TRUE), 0)::int AS total_cards,
-                COUNT(DISTINCT category) FILTER (WHERE is_tutorial IS NOT TRUE)::int AS categories,
-                COUNT(DISTINCT NULLIF(set_code, '')) FILTER (
-                    WHERE is_tutorial IS NOT TRUE
+                COUNT(*) FILTER (WHERE u.is_tutorial IS NOT TRUE)::int AS unique_cards,
+                COALESCE(SUM(u.quantity) FILTER (WHERE u.is_tutorial IS NOT TRUE), 0)::int AS total_cards,
+                COUNT(DISTINCT u.category) FILTER (WHERE u.is_tutorial IS NOT TRUE)::int AS categories,
+                COUNT(DISTINCT NULLIF(u.set_code, '')) FILTER (
+                    WHERE u.is_tutorial IS NOT TRUE
                 )::int AS sets,
                 COUNT(*) FILTER (
-                    WHERE is_tutorial IS NOT TRUE
-                      AND market_price_usd IS NOT NULL
-                      AND market_price_usd > 0
+                    WHERE u.is_tutorial IS NOT TRUE
+                      AND COALESCE(u.market_price_usd, c.market_price_usd) > 0
                 )::int AS priced_cards,
                 COUNT(*) FILTER (
-                    WHERE is_tutorial IS NOT TRUE
-                      AND (market_price_usd IS NULL OR market_price_usd <= 0)
+                    WHERE u.is_tutorial IS NOT TRUE
+                      AND COALESCE(u.market_price_usd, c.market_price_usd, 0) <= 0
                 )::int AS unpriced_cards,
-                COALESCE(SUM(quantity * COALESCE(market_price_usd, 0)) FILTER (
-                    WHERE is_tutorial IS NOT TRUE
+                COALESCE(SUM(
+                    u.quantity * COALESCE(u.market_price_usd, c.market_price_usd, 0)
+                ) FILTER (
+                    WHERE u.is_tutorial IS NOT TRUE
                 ), 0)::numeric AS total_value_usd,
-                COALESCE(MAX(market_price_usd) FILTER (
-                    WHERE is_tutorial IS NOT TRUE
+                COALESCE(MAX(COALESCE(u.market_price_usd, c.market_price_usd)) FILTER (
+                    WHERE u.is_tutorial IS NOT TRUE
                 ), 0)::numeric AS max_card_value_usd,
                 COUNT(*)::int AS all_unique_cards
-            FROM renaiss_user_cards
-            WHERE user_id = $1
+            FROM renaiss_user_cards u
+            LEFT JOIN renaiss_catalog_cards c
+              ON c.local_card_id = u.local_card_id::text
+             AND c.category = u.category
+             AND c.is_active = TRUE
+            WHERE u.user_id = $1
             """,
             user_id,
         )
@@ -100,16 +105,23 @@ async def get_portfolio_stats(user_id: int | None, *, limit: int = 5) -> Portfol
 
         top_rows = await conn.fetch(
             """
-            SELECT card_name, category, grade, quantity, set_code, collector_number, market_price_usd
-            FROM renaiss_user_cards
-            WHERE user_id = $1 AND is_tutorial IS NOT TRUE
+            SELECT u.card_name, u.category, u.grade, u.quantity, u.set_code,
+                   u.collector_number,
+                   COALESCE(u.market_price_usd, c.market_price_usd) AS market_price_usd
+            FROM renaiss_user_cards u
+            LEFT JOIN renaiss_catalog_cards c
+              ON c.local_card_id = u.local_card_id::text
+             AND c.category = u.category
+             AND c.is_active = TRUE
+            WHERE u.user_id = $1 AND u.is_tutorial IS NOT TRUE
             ORDER BY
-                CASE COALESCE(grade, '')
+                COALESCE(u.market_price_usd, c.market_price_usd, 0) DESC,
+                CASE COALESCE(u.grade, '')
                     WHEN 'MUR' THEN 8 WHEN 'UR' THEN 7 WHEN 'SAR' THEN 6
                     WHEN 'SR' THEN 5 WHEN 'AR' THEN 4 WHEN 'RR' THEN 3
                     WHEN 'R' THEN 2 ELSE 1
                 END DESC,
-                updated_at DESC
+                u.updated_at DESC
             LIMIT $2
             """,
             user_id,
@@ -117,10 +129,16 @@ async def get_portfolio_stats(user_id: int | None, *, limit: int = 5) -> Portfol
         )
         recent_rows = await conn.fetch(
             """
-            SELECT card_name, category, grade, quantity, set_code, updated_at, is_tutorial
-            FROM renaiss_user_cards
-            WHERE user_id = $1
-            ORDER BY updated_at DESC
+            SELECT u.card_name, u.category, u.grade, u.quantity, u.set_code,
+                   u.updated_at, u.is_tutorial,
+                   COALESCE(u.market_price_usd, c.market_price_usd) AS market_price_usd
+            FROM renaiss_user_cards u
+            LEFT JOIN renaiss_catalog_cards c
+              ON c.local_card_id = u.local_card_id::text
+             AND c.category = u.category
+             AND c.is_active = TRUE
+            WHERE u.user_id = $1
+            ORDER BY u.updated_at DESC
             LIMIT $2
             """,
             user_id,

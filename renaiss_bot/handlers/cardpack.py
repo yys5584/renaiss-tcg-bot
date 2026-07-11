@@ -117,7 +117,11 @@ def _format_money(value) -> str:
         amount = float(value or 0)
     except (TypeError, ValueError):
         amount = 0
-    return f"${amount:,.0f}" if amount > 0 else "-"
+    if amount <= 0:
+        return "-"
+    if amount < 100:
+        return f"${amount:,.2f}".rstrip("0").rstrip(".")
+    return f"${amount:,.0f}"
 
 
 def _grade_line(grades: list[dict]) -> str:
@@ -143,6 +147,9 @@ def _card_row(idx: int, row: dict) -> str:
     category = str(row.get("category") or "")
     if category and category != "pokemon_tcg":
         parts.append(escape(category.replace("_", " ").title()))
+    price = _format_money(row.get("market_price_usd"))
+    if price != "-":
+        parts.append(f"<b>{price}</b>")
     return " · ".join(parts)
 
 
@@ -182,6 +189,8 @@ def _portfolio_text(stats: PortfolioStats) -> str:
             else ""
         )
         lines.append(f"💰 Est. value <b>{value}</b>{pending}")
+    else:
+        lines.append("💰 Est. value <b>pending</b> — verified prices update twice a day.")
     lines.append(
         f"📚 <b>{stats.total_cards}</b> cards · <b>{stats.unique_cards}</b> unique"
         f" · <b>{stats.sets}</b> sets"
