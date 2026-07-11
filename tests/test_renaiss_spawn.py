@@ -491,7 +491,9 @@ def test_spawn_prompt_hides_fmv_and_value_band():
     assert "$600" not in text
     assert "GRAIL" not in text
     assert "Type <code>c</code> to catch!" in text
-    assert "Base Set #4/102 · English" in text
+    # 완전 미스터리: 리빌 전에는 카드 정체(세트·이름)도 숨긴다
+    assert "Base Set" not in text
+    assert "???" in text
 
 
 def test_cohort_experiment_is_off_by_default(monkeypatch):

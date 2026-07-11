@@ -38,7 +38,11 @@ from renaiss_bot.handlers.message_cleanup import (
     command_delete_delay_seconds,
     delete_group_command_job,
 )
-from renaiss_bot.database.queries import award_spawn_card, grant_first_c_starter
+from renaiss_bot.database.queries import (
+    award_spawn_card,
+    get_portfolio_values,
+    grant_first_c_starter,
+)
 from renaiss_bot.renderers.overlay import (
     overlay_cache_key,
     prompt_render_key,
@@ -370,8 +374,8 @@ def _spawn_text(active: ActiveSpawn) -> str:
         action += " Guess the price below."
     lines = [
         f"{icon('crystal')} <b>BLIND MARKET SPAWN</b>",
-        f"<b>{escape(spawn.card.card_name)}</b> · {_tier_badge(spawn.card.grade)}",
-        _identity_line(spawn),
+        # 리빌 전에는 티어(가격대)만 힌트로 준다. 카드 정체는 리빌에서 공개.
+        f"<b>???</b> · {_tier_badge(spawn.card.grade)}",
         action,
         f"⏳ {remaining}s · 👥 {len(active.catchers)} · 🧠 {len(active.guesses)}",
     ]
@@ -1030,6 +1034,18 @@ async def _resolve(context: ContextTypes.DEFAULT_TYPE, active: ActiveSpawn) -> N
                 f"{icon('gotcha')} <b>{escape(winner_name)}</b> caught it"
                 + _miss_line(catchers, winner_id)
             )
+            # 방금 획득분을 포함한 당첨자 누적 컬렉션 시세를 함께 보여준다.
+            try:
+                totals = await get_portfolio_values([winner_id])
+                total = totals.get(winner_id)
+                if total and total >= 1:
+                    winner_line += (
+                        "\n"
+                        f"{icon('container')} <b>{escape(winner_name)}</b>"
+                        f" collection: <b>${total:,.0f}</b>"
+                    )
+            except Exception:
+                pass
     else:
         winner_line = "💨 Nobody caught it."
 
