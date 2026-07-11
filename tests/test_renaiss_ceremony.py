@@ -73,6 +73,37 @@ async def test_gate_is_transparent_outside_ceremony(monkeypatch):
     await ceremony_gate(update, SimpleNamespace())  # no exception
 
 
+class _Frozen2205(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        frozen = datetime(2026, 7, 12, 22, 5, 30)
+        return frozen.replace(tzinfo=tz) if tz else frozen
+
+
+async def test_spawn_loop_defers_until_ceremony_ends(monkeypatch):
+    from unittest.mock import Mock
+
+    from renaiss_bot import jobs as jobs_module
+
+    monkeypatch.setenv("RENAISS_CEREMONY_MINUTES", "15")
+    monkeypatch.setattr(jobs_module, "ceremony_active", lambda: True)
+    monkeypatch.setattr(jobs_module, "datetime", _Frozen2205)
+    spawn_tick = AsyncMock()
+    monkeypatch.setattr(jobs_module, "spawn_tick", spawn_tick)
+    run_once = Mock()
+    context = SimpleNamespace(
+        application=None,
+        job_queue=SimpleNamespace(run_once=run_once, get_jobs_by_name=lambda name: []),
+    )
+
+    await jobs_module.spawn_loop_job(context)
+
+    spawn_tick.assert_not_awaited()
+    delay = run_once.call_args.kwargs["when"]
+    # 22:05:30 → resume at 22:15:00 (+5s buffer) = 575s
+    assert 560 <= delay <= 600
+
+
 def test_ranking_period_bounds_kst_math():
     now = _kst(2026, 7, 13, 22, 0)  # Monday 22:00 KST
     day_start, day_end = ranking_period_bounds("day", now=now)

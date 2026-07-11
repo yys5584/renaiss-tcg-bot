@@ -48,7 +48,7 @@ from renaiss_bot.handlers.spawn import (
     spawn_interval_bounds,
     spawn_tick,
 )
-from renaiss_bot.services.ceremony import ceremony_minutes
+from renaiss_bot.services.ceremony import ceremony_active, ceremony_minutes
 from renaiss_bot.services.client import RenaissAPICooldown, fetch_official_price
 from renaiss_bot.services.emoji import icon
 from renaiss_bot.services.market import (
@@ -241,10 +241,37 @@ async def cleanup_tracking_links_job(context: ContextTypes.DEFAULT_TYPE) -> None
         logger.warning("Expired referral-link cleanup skipped: %s", exc)
 
 
+def _schedule_next_spawn(context: ContextTypes.DEFAULT_TYPE, delay: float) -> None:
+    # Replace-by-name keeps exactly one loop even if an operator command
+    # rescheduled while this tick was still running.
+    jobs_by_name = getattr(context.job_queue, "get_jobs_by_name", None)
+    for job in jobs_by_name("renaiss_official_spawn") if callable(jobs_by_name) else ():
+        job.schedule_removal()
+    context.job_queue.run_once(
+        spawn_loop_job,
+        when=delay,
+        name="renaiss_official_spawn",
+        job_kwargs={"misfire_grace_time": None},
+    )
+
+
 async def spawn_loop_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Run one spawn tick and always schedule the next quiet variable interval."""
     application = getattr(context, "application", None)
     burst = spawn_burst_active(application)
+    if ceremony_active():
+        # The 22:00 ranking ceremony owns the room; resume right after it,
+        # in burst and pilot mode alike.
+        now_kst = datetime.now(KST)
+        window_end = now_kst.replace(
+            minute=ceremony_minutes() % 60, second=0, microsecond=0
+        )
+        if ceremony_minutes() >= 60:
+            window_end = window_end.replace(minute=0) + timedelta(hours=1)
+        resume_in = max(5.0, (window_end - now_kst).total_seconds() + 5.0)
+        logger.info("Spawn tick deferred for the ranking ceremony (%.0fs).", resume_in)
+        _schedule_next_spawn(context, resume_in)
+        return
     try:
         await spawn_tick(context, burst=burst)
     finally:
@@ -253,17 +280,7 @@ async def spawn_loop_job(context: ContextTypes.DEFAULT_TYPE) -> None:
             delay = burst_interval_seconds()
         else:
             delay = next_spawn_delay()
-        # Replace-by-name keeps exactly one loop even if an operator command
-        # rescheduled while this tick was still running.
-        jobs_by_name = getattr(context.job_queue, "get_jobs_by_name", None)
-        for job in jobs_by_name("renaiss_official_spawn") if callable(jobs_by_name) else ():
-            job.schedule_removal()
-        context.job_queue.run_once(
-            spawn_loop_job,
-            when=delay,
-            name="renaiss_official_spawn",
-            job_kwargs={"misfire_grace_time": None},
-        )
+        _schedule_next_spawn(context, delay)
 
 
 def _http_retry_after_seconds(value: str | None) -> int:
