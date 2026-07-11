@@ -269,6 +269,9 @@
       }
     });
     renderAuth();
+    // 도감 fetch 와 병렬로 돌기 때문에, 어느 쪽이 늦게 끝나든 접근 게이트가
+    // 최종 인증 상태로 수렴해야 한다.
+    updateCollectionAccess();
   }
 
   async function authenticate() {
@@ -500,9 +503,11 @@
     applyLocale(state.locale, false);
     bind();
     showPage();
-    await loadConfigAndAuth();
-    if (["pokedex", "mycards"].indexOf(state.page) >= 0) await loadCollection(true);
-    if (state.page === "leaderboard") await loadLeaderboard(false);
+    // 인증/설정과 페이지 데이터는 독립 API라 병렬로 받는다 (첫 카드 표시 단축).
+    var boot = [loadConfigAndAuth()];
+    if (["pokedex", "mycards"].indexOf(state.page) >= 0) boot.push(loadCollection(true));
+    if (state.page === "leaderboard") boot.push(loadLeaderboard(false));
+    await Promise.all(boot);
   }
 
   init();
