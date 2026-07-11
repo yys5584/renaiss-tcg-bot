@@ -11,7 +11,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 WIDTH = 1080
 HEIGHT = 1350
-TEMPLATE_VERSION = "slab-land-v2"
+TEMPLATE_VERSION = "slab-land-v3"
 _LOGO_PNG_PATH = Path(__file__).resolve().parents[1] / "assets" / "renaiss_logo.png"
 _FONTS_DIR = Path(__file__).resolve().parents[1] / "assets" / "fonts"
 
@@ -275,6 +275,7 @@ def render_slab_landscape(
     price_text: str,
     headline: str,
     label_name: str | None = None,
+    grading_label: str = "PSA 10 GEM MINT",
 ) -> bytes:
     """Renaiss 슬랩을 왼쪽에, 큰 타이포를 오른쪽에 두는 16:9 합성."""
     template = _slab_template()
@@ -307,11 +308,12 @@ def render_slab_landscape(
         font=tier_font,
         anchor="rm",
     )
-    # 이름은 티어 배지와 겹치지 않게 남은 폭에 맞춰 폰트를 줄인다.
+    # 이름은 티어 배지와 겹치지 않게 남은 폭에 맞춰 폰트를 줄이고,
+    # 그 아래 감정등급(PSA 10)을 원본 슬랩 라벨처럼 병기한다.
     label_text = label_name if label_name is not None else name
     available = (_SLAB_LABEL[2] - 26 - tier_width - 18) - (_SLAB_LABEL[0] + 26)
-    name_font = _font(42)
-    for size in range(42, 19, -2):
+    name_font = _font(38)
+    for size in range(38, 19, -2):
         name_font = _font(size)
         if draw.textlength(label_text, font=name_font) <= available:
             break
@@ -320,12 +322,20 @@ def render_slab_landscape(
             label_text = label_text[:-1]
         label_text += "…"
     draw.text(
-        (_SLAB_LABEL[0] + 26, label_center_y),
+        (_SLAB_LABEL[0] + 26, label_center_y - 16),
         label_text,
         fill=(15, 15, 15),
         font=name_font,
         anchor="lm",
     )
+    if grading_label:
+        draw.text(
+            (_SLAB_LABEL[0] + 26, label_center_y + 26),
+            grading_label[:22],
+            fill=(100, 100, 100),
+            font=_font(22),
+            anchor="lm",
+        )
     card = _load_card_image(card_image)
     if card is not None:
         fitted = ImageOps.contain(
@@ -373,8 +383,8 @@ def render_slab_landscape(
 
     headline_font = _fit(name[:26], 84, 44)
     draw.text((text_x, 262), name[:26], fill=(240, 240, 238), font=headline_font)
-    set_font = _fit(set_line[:46], 36, 24, bold=False)
-    draw.text((text_x, 396), set_line[:46], fill=(150, 150, 155), font=set_font)
+    set_font = _fit(set_line[:58], 36, 22, bold=False)
+    draw.text((text_x, 396), set_line[:58], fill=(150, 150, 155), font=set_font)
 
     badge_font = _font(64)
     bounds = draw.textbbox((0, 0), tier_label, font=badge_font)

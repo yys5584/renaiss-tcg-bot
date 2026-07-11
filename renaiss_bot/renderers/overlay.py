@@ -285,7 +285,9 @@ def _set_line(card: CardIdentity) -> str:
         label = label[:19].rstrip() + "…"
     number = f" #{card.collector_number}" if card.collector_number else ""
     language = f" · {card.language}" if card.language else ""
-    return f"{label}{number}{language}"
+    market_grade = str((card.metadata or {}).get("market_grade") or "")
+    grading = " · PSA 10" if market_grade.upper().startswith("PSA 10") else ""
+    return f"{label}{number}{language}{grading}"
 
 
 def _style_vars(kind: str) -> dict[str, str]:

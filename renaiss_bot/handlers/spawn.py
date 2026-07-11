@@ -312,7 +312,9 @@ def _identity_line(spawn: Spawn) -> str:
         set_label = set_label[:27].rstrip() + "…"
     number = f" #{card.collector_number}" if card.collector_number else ""
     language = f" · {card.language}" if card.language else ""
-    return f"{escape(set_label)}{escape(number)}{escape(language)}"
+    market_grade = str((card.metadata or {}).get("market_grade") or "")
+    grading = " · PSA 10" if market_grade.upper().startswith("PSA 10") else ""
+    return f"{escape(set_label)}{escape(number)}{escape(language)}{escape(grading)}"
 
 
 def _freshness_text(price: RenaissPrice, *, now: datetime | None = None) -> str | None:
