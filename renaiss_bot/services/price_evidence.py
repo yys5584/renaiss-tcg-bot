@@ -70,9 +70,17 @@ def catalog_reference_price(
         price_status = "candidate"
     if price_status == "exact" and price_updated_at is None:
         price_status = "candidate"
+    source_payload = metadata.get("source_payload")
+    if not isinstance(source_payload, dict):
+        source_payload = {}
     kwargs: dict[str, Any] = {
         "status": price_status,
         "source": str(metadata.get("price_source") or metadata.get("source") or "catalog"),
+        "grade_label": str(
+            metadata.get("market_grade") or source_payload.get("gradeLabel") or ""
+        ).strip()
+        or None,
+        "grading_company": str(source_payload.get("company") or "").strip() or None,
         "confidence": str(metadata.get("price_confidence") or "") or None,
         "confidence_score": _optional_float(metadata.get("price_confidence_score")),
         "source_count": _optional_int(metadata.get("price_source_count")),
