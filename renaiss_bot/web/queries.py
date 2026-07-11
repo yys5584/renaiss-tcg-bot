@@ -230,9 +230,9 @@ async def get_collection(
     sort = str(sort or "set").strip().lower()
     if grade not in {"ALL", *GRADES}:
         grade = "ALL"
-    if owned not in {"all", "owned", "missing", "archived"}:
+    if owned not in {"all", "owned", "missing", "archived", "mine"}:
         owned = "all"
-    if not authenticated and owned in {"owned", "archived"}:
+    if not authenticated and owned in {"owned", "archived", "mine"}:
         owned = "all"
     if sort not in {"set", "name", "grade", "recent"}:
         sort = "set"
@@ -302,6 +302,7 @@ async def get_collection(
                   OR ($5 = 'owned' AND d.quantity > 0 AND d.source_kind = 'catalog')
                   OR ($5 = 'missing' AND d.quantity = 0 AND d.source_kind = 'catalog')
                   OR ($5 = 'archived' AND d.quantity > 0 AND d.source_kind = 'archived')
+                  OR ($5 = 'mine' AND d.quantity > 0)
               )
             ORDER BY {order_sql}
             LIMIT $6 OFFSET $7

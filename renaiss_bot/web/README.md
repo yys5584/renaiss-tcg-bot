@@ -14,7 +14,7 @@ $env:RENAISS_WEB_PORT='18083'
 python -m renaiss_bot.web.app
 ```
 
-열기: `http://127.0.0.1:18083/renaiss`
+열기: `http://127.0.0.1:18083/renaiss/pokedex`
 
 `RENAISS_WEB_PREVIEW=1`은 공개 배포에 사용할 수 없다. 실제 서비스는 최소 10장의 활성
 `renaiss_catalog_cards`와 PostgreSQL 준비 상태를 확인하고, 부족하면 TGPoke의 일반 카드나
@@ -74,13 +74,23 @@ $env:RENAISS_ENV_FILE="$env:ProgramData\Renaiss\secrets\web.env"
 
 ## Routes
 
-- `/renaiss`: 도감 앱
+- `/renaiss`: 공개 도감과 같은 진입 화면
+- `/renaiss/pokedex`: 로그인 없이 보는 공개 콜라보 도감
+- `/renaiss/mycards`: Telegram 로그인 사용자의 보유 카드만 보는 개인 도감
+- `/renaiss/login`: Telegram OIDC 로그인 화면
+- `/renaiss/leaderboard`: 매주 KST에 초기화되는 공개 포획 당첨 순위
+- `/renaiss/guide`: 실제 봇 명령어와 짧은 게임 가이드
 - `/renaiss/api/collection`: 공개 카탈로그와 로그인 사용자의 보유 여부
 - `/renaiss/api/leaderboard`: 매주 KST에 초기화되는 익명 공개 포획 당첨 순위
 - `/renaiss/api/auth/telegram/start`: OIDC 시작
 - `/renaiss/api/auth/telegram/callback`: 등록된 OIDC callback
 - `/renaiss/livez`: 프로세스 liveness
 - `/renaiss/readyz`: DB, 최소 카탈로그, 인증 설정 readiness
+
+화면은 기존 TGPoke 도감의 밝은 회청색 배경, 884px 흰색 shell, 상단 TGPoke 메뉴,
+Telegram 파란 로그인 버튼, 5열/모바일 2열 카드 타일을 재사용한다. 기존 TGPoke의 legacy
+Telegram widget·localStorage 세션·홀로그램 glow는 가져오지 않고, 이 서비스의 OIDC와
+HttpOnly cookie를 유지한다.
 
 API는 FMV, 포트폴리오 총액 또는 매매 정보를 반환하지 않는다. 리더보드도 누적 도감이나
 자산 대신 그 주의 공개 포획 당첨만 집계한다. 가격 공개와 Daily Pick은 Telegram 핵심

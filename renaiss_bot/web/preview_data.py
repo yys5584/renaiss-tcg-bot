@@ -95,7 +95,7 @@ def preview_collection(user_id: int | None, **filters: Any) -> dict[str, Any]:
             continue
         if grade != "ALL" and card["grade"] != grade:
             continue
-        if authenticated and owned_filter == "owned" and not card["owned"]:
+        if authenticated and owned_filter in {"owned", "mine"} and not card["owned"]:
             continue
         if owned_filter == "missing" and card["owned"]:
             continue

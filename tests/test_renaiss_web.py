@@ -62,7 +62,7 @@ async def test_preview_serves_only_prefixed_app_and_security_headers(preview_cli
     assert response.status == 200
     text = await response.text()
     assert "Renaiss" in text
-    assert "/renaiss/static/app.js?v=20260711-5" in text
+    assert "/renaiss/static/app.js?v=20260711-7" in text
     assert 'data-copy="/mycards"' in text
     assert 'data-copy="/market"' not in text
     assert response.headers["X-Content-Type-Options"] == "nosniff"
@@ -74,12 +74,51 @@ async def test_preview_serves_only_prefixed_app_and_security_headers(preview_cli
     assert (await preview_client.get("/api/collection")).status == 404
 
 
+async def test_tgpoke_native_pages_have_real_prefixed_routes(preview_client):
+    for path in (
+        "/renaiss/pokedex",
+        "/renaiss/mycards",
+        "/renaiss/login",
+        "/renaiss/leaderboard",
+        "/renaiss/guide",
+    ):
+        response = await preview_client.get(path)
+        assert response.status == 200, path
+        html = await response.text()
+        assert 'class="brand-mark"' in html
+        assert 'href="/renaiss/pokedex"' in html
+        assert 'href="/renaiss/login"' in html
+
+    slash = await preview_client.get(
+        "/renaiss/mycards/?lang=en", allow_redirects=False
+    )
+    assert slash.status == 308
+    assert slash.headers["Location"] == "/renaiss/mycards?lang=en"
+
+
+async def test_frontend_reuses_tgpoke_shell_without_legacy_auth(preview_client):
+    html = await (await preview_client.get("/renaiss/pokedex")).text()
+    css = await (await preview_client.get("/renaiss/static/styles.css")).text()
+
+    assert 'class="topbar"' in html
+    assert 'class="brand-mark"' in html
+    assert 'data-page-section="login"' in html
+    assert 'data-page-section="pokedex,mycards"' in html
+    assert "telegram-widget" not in html.lower()
+    assert "onclick=" not in html.lower()
+    assert "--content: 884px" in css
+    assert "--telegram: #2aabee" in css
+    assert "aspect-ratio: 63 / 88" in css
+    assert "object-fit: contain" in css
+    assert "object-fit: cover" not in css
+
+
 async def test_legacy_collection_path_redirects_without_losing_query(preview_client):
     response = await preview_client.get(
         "/renaiss/collection/?lang=en", allow_redirects=False
     )
     assert response.status == 308
-    assert response.headers["Location"] == "/renaiss?lang=en"
+    assert response.headers["Location"] == "/renaiss/pokedex?lang=en"
 
 
 async def test_preview_login_exposes_owned_collection_and_me(preview_client):
@@ -112,6 +151,12 @@ async def test_preview_login_exposes_owned_collection_and_me(preview_client):
     assert collection["summary"]["owned_in_catalog"] == 3
     assert collection["summary"]["completion_pct"] == 60.0
     assert sum(bool(card["owned"]) for card in collection["cards"]) == 3
+
+    mine = await (
+        await preview_client.get("/renaiss/api/collection?owned=mine")
+    ).json()
+    assert len(mine["cards"]) == 3
+    assert all(card["owned"] for card in mine["cards"])
 
     leaderboard = await (
         await preview_client.get("/renaiss/api/leaderboard")
@@ -481,3 +526,10 @@ def test_web_queries_do_not_use_generic_cards_or_market_values():
     assert "from public.renaiss_user_cards" in source
     assert "from public.renaiss_events" in source
     assert "event_name = 'catch_won'" in source
+    assert "$5 = 'mine' and d.quantity > 0" in source
+
+
+def test_oidc_callback_returns_to_real_login_and_my_cards_pages():
+    source = inspect.getsource(web_app.auth_oidc_callback)
+    assert 'location="/renaiss/mycards?auth=success"' in source
+    assert 'location="/renaiss/login?auth=failed"' in source

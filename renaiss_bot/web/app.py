@@ -328,12 +328,26 @@ async def index(_request: web.Request) -> web.StreamResponse:
     return web.FileResponse(INDEX_FILE)
 
 
-def _canonical_location(request: web.Request) -> str:
-    return "/renaiss" + (f"?{request.query_string}" if request.query_string else "")
+def _redirect_location(request: web.Request, target: str) -> str:
+    return target + (f"?{request.query_string}" if request.query_string else "")
 
 
-async def canonical_redirect(request: web.Request) -> web.StreamResponse:
-    raise web.HTTPPermanentRedirect(location=_canonical_location(request))
+async def trailing_slash_redirect(request: web.Request) -> web.StreamResponse:
+    raise web.HTTPPermanentRedirect(
+        location=_redirect_location(request, request.path.rstrip("/"))
+    )
+
+
+async def legacy_collection_redirect(request: web.Request) -> web.StreamResponse:
+    raise web.HTTPPermanentRedirect(
+        location=_redirect_location(request, "/renaiss/pokedex")
+    )
+
+
+async def legacy_commands_redirect(request: web.Request) -> web.StreamResponse:
+    raise web.HTTPPermanentRedirect(
+        location=_redirect_location(request, "/renaiss/guide")
+    )
 
 
 async def livez(_request: web.Request) -> web.Response:
@@ -469,11 +483,11 @@ async def auth_oidc_callback(request: web.Request) -> web.StreamResponse:
             client_id=config.client_id,
             nonce=str(flow["nonce"]),
         )
-        response = web.HTTPFound(location="/renaiss?auth=success")
+        response = web.HTTPFound(location="/renaiss/mycards?auth=success")
         _set_session_cookie(response, issue_session(user), preview=False)
     except AuthError as exc:
         logger.warning("Telegram web login rejected (reason=%s)", type(exc).__name__)
-        response = web.HTTPFound(location="/renaiss?auth=failed")
+        response = web.HTTPFound(location="/renaiss/login?auth=failed")
     response.del_cookie(FLOW_COOKIE, path=COOKIE_PATH)
     raise response
 
@@ -576,9 +590,14 @@ def create_app(*, preview: bool | None = None) -> web.Application:
     app[DATA_GATE_KEY] = asyncio.Semaphore(4)
     app[AUTH_GATE_KEY] = asyncio.Semaphore(4)
     app.router.add_get("/renaiss", index)
-    app.router.add_get("/renaiss/", canonical_redirect)
-    app.router.add_get("/renaiss/collection", canonical_redirect)
-    app.router.add_get("/renaiss/collection/", canonical_redirect)
+    app.router.add_get("/renaiss/", trailing_slash_redirect)
+    for page in ("pokedex", "mycards", "leaderboard", "guide", "login"):
+        app.router.add_get(f"/renaiss/{page}", index)
+        app.router.add_get(f"/renaiss/{page}/", trailing_slash_redirect)
+    app.router.add_get("/renaiss/collection", legacy_collection_redirect)
+    app.router.add_get("/renaiss/collection/", legacy_collection_redirect)
+    app.router.add_get("/renaiss/commands", legacy_commands_redirect)
+    app.router.add_get("/renaiss/commands/", legacy_commands_redirect)
     app.router.add_get("/renaiss/livez", livez)
     app.router.add_get("/renaiss/readyz", readyz)
     app.router.add_get("/renaiss/api/config", api_config)
