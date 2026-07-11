@@ -1,0 +1,11 @@
+# Merge only these ingress rules into the host's existing, secret-bearing config.
+# The specific Renaiss path must stay above the broad tgpoke.com rule.
+ingress:
+  - hostname: tgpoke.com
+    path: ^/renaiss($|/.*)
+    service: http://127.0.0.1:18082
+
+  - hostname: tgpoke.com
+    service: http://127.0.0.1:8080
+
+  - service: http_status:404

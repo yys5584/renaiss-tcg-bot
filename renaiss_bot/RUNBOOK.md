@@ -27,7 +27,7 @@
 Telegram 파일럿의 immutable release, Task Scheduler, rollback 전체 절차는
 [`ops/README.md`](ops/README.md)를 함께 따른다. 이 저장소는 task를 자동 등록하지 않는다.
 
-세 Windows launcher는 로그를 소스 트리에 쓰지 않는다. `RENAISS_LOG_DIR`이 없으면
+네 Windows launcher는 로그를 소스 트리에 쓰지 않는다. `RENAISS_LOG_DIR`이 없으면
 `%ProgramData%\Renaiss\logs`를 사용하며, 이 디렉터리를 자동 생성하지 않는다.
 launcher를 등록하기 전에 운영자가 절대 로컬 경로를 만들고 서비스 계정에만
 `Modify` 권한을 부여한다. 상대경로, 소스 트리 안의 경로, 없는 디렉터리, 로그 파일을
@@ -55,8 +55,8 @@ icacls $logDir /grant:r `
 
 launcher의 bounded log runner 기본값은 파일당 10 MiB와 백업 5개다.
 `RENAISS_LOG_MAX_BYTES=10485760`, `RENAISS_LOG_BACKUPS=5`이며 active 1개와 백업
-5개를 합쳐 서비스별 최대 약 60 MiB다. 세 서비스를 모두 켜면 기본 최대 약
-180 MiB이므로 볼륨 경보는 이 상한과 여유 공간을 함께 기준으로 잡는다. 두 값도
+5개를 합쳐 서비스별 최대 약 60 MiB다. 네 서비스를 모두 켜면 기본 최대 약
+240 MiB이므로 볼륨 경보는 이 상한과 여유 공간을 함께 기준으로 잡는다. 두 값도
 `.env`가 아니라 launcher의 프로세스 환경에 넣는다. 허용 범위는 파일당
 64 KiB~1 GiB, 백업 0~20개이며 범위를 벗어나면 서비스 모듈을 실행하지 않는다.
 

@@ -10,14 +10,23 @@ with experimental reference values, and test your insight by guessing hidden FMV
 
 ## Features
 
-- **Packs** — daily free collector packs; no RP purchases in the default pilot
-- **Collection tracker** — owned-card counts, grades, top cards, and recent catches
-- **Grading guide** — `/price` shows RAW vs graded premium (e.g. `RAW $45 → PSA 10 $390, 8.7x`)
-- **Optional Daily Price Quiz** — opt-in comparison layer; off in the default pilot
 - **Blind market spawns** — `c` to enter a random draw, guess the hidden FMV, then compare the room's picks
+- **Collection tracker** — owned-card counts, grades, top cards, and recent catches
 - **First-c onboarding** — one lifetime, collection-only Welcome Card with no FMV or scored use
-- **Daily Market Pick** — choose one verified card in DM, persist its first valid 24h result, and share a privacy-safe public bell
+- **Grading guide** — `/price` shows RAW vs graded premium (e.g. `RAW $45 → PSA 10 $390, 8.7x`)
 - **Card images** — cached fixed-frame Pillow compositor with Telegram `file_id` reuse
+- **Optional Daily Price Quiz** — opt-in comparison layer; off in the default pilot
+- **Gated Daily Market Pick** — disabled until the Partner API and PostgreSQL live preflight pass
+- **Gated private pack experiment** — disabled by default and separate from the public `c` core loop
+
+## Web companion ownership
+
+This repository also owns the complete `tgpoke.com/renaiss` collaboration companion:
+UI, static assets, read-only collection API, and Telegram OIDC login. The TGPoke
+repository keeps only navigation links; Cloudflare Tunnel routes the `/renaiss`
+path to this standalone service without stripping the prefix. See
+[`renaiss_bot/web/README.md`](renaiss_bot/web/README.md) for the minimal web-only
+environment, database role, health gate, and ingress handoff.
 
 ## Setup
 
@@ -44,6 +53,10 @@ See [`renaiss_bot/.env.example`](renaiss_bot/.env.example). Key values:
 | `RENAISS_API_KEY` / `RENAISS_API_SECRET` | Partner API server-side credentials |
 | `RENAISS_DAILY_PICK_ENABLED` | Admission flag; off by default and opened only after a live startup probe |
 | `RENAISS_TELEGRAM_HEALTH_ENABLED` | Optional loopback-only `/livez` and `/readyz` listener |
+| `RENAISS_WEB_SESSION_SECRET` | Independent 32+ character secret for `/renaiss` web sessions |
+| `RENAISS_TELEGRAM_OIDC_CLIENT_ID` | BotFather Web Login OIDC client id for `tgpoke.com/renaiss` |
+| `RENAISS_TELEGRAM_OIDC_CLIENT_SECRET` | BotFather Web Login OIDC client secret |
+| `RENAISS_TELEGRAM_OIDC_REDIRECT_URI` | Exact registered HTTPS callback under `/renaiss/api/auth/telegram/callback` |
 | `RENAISS_CLICK_TRACKER_PUBLIC_BASE_URL` | Optional HTTPS click-redirect origin |
 | `RENAISS_REFERRAL_URL` | Referral link for card CTAs |
 

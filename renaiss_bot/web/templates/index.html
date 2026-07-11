@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f2e9">
+  <meta name="description" content="TGPoke에서 만나는 Renaiss 콜라보 카드 도감, 리더보드, 명령어와 가이드.">
+  <title>Renaiss 콜라보 도감 | TGPoke</title>
+  <link rel="stylesheet" href="/renaiss/static/styles.css?v=20260711-4">
+  <script defer src="/renaiss/static/app.js?v=20260711-5"></script>
+</head>
+<body>
+  <a class="skip-link" href="#content" data-i18n="skip">본문으로 건너뛰기</a>
+
+  <header class="site-header">
+    <div class="header-row">
+      <a class="brand" href="/renaiss" aria-label="Renaiss 콜라보 도감 홈" data-i18n-aria="brandHome">
+        <strong>Renaiss</strong>
+        <span data-i18n="collabArchive">콜라보 도감</span>
+      </a>
+
+      <nav class="desktop-tabs" aria-label="주요 메뉴" data-i18n-aria="primaryNavigation" role="tablist">
+        <button class="tab is-active" type="button" role="tab" aria-selected="true" data-view="dex" data-i18n="tabDex">도감</button>
+        <button class="tab" type="button" role="tab" aria-selected="false" data-view="leaderboard" data-i18n="tabLeaderboard">리더보드</button>
+        <button class="tab" type="button" role="tab" aria-selected="false" data-view="commands" data-i18n="tabCommands">명령어</button>
+        <button class="tab" type="button" role="tab" aria-selected="false" data-view="guide" data-i18n="tabGuide">가이드</button>
+      </nav>
+
+      <div class="header-actions">
+        <a class="tgpoke-link" href="/">TGPoke</a>
+        <button class="login-button" id="loginButton" type="button" data-i18n="telegramLogin">Telegram 로그인</button>
+        <div class="language" role="group" aria-label="언어 선택" data-i18n-aria="languageSelection">
+          <button type="button" data-locale="ko" aria-pressed="true">KO</button>
+          <span aria-hidden="true">/</span>
+          <button type="button" data-locale="en" aria-pressed="false">EN</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main id="content" class="page">
+    <section class="panel is-active" data-panel="dex" id="panel-dex" role="tabpanel">
+      <div class="page-heading">
+        <div>
+          <p class="eyebrow" data-i18n="collabProject">TGPoke × Renaiss 콜라보 프로젝트</p>
+          <h1 data-i18n="dexTitle">카드 도감</h1>
+          <p data-i18n="dexDescription">포획한 카드와 현재 콜라보 카드 풀의 완성도를 확인하세요.</p>
+        </div>
+        <div class="page-tools">
+          <p class="scope" id="catalogScope" data-i18n="loadingCatalog">카드 풀 불러오는 중</p>
+          <a class="group-link" id="telegramGroupLink" href="#" target="_blank" rel="noopener" hidden data-i18n="openGroup">Telegram 게임방</a>
+        </div>
+      </div>
+
+      <section class="summary" aria-label="수집 요약" data-i18n-aria="collectionSummary">
+        <div class="summary-progress">
+          <span data-i18n="completion">달성률</span>
+          <strong id="completionValue">—</strong>
+          <div class="progress" aria-hidden="true"><i id="completionBar"></i></div>
+          <small id="completionDetail" data-i18n="signInForProgress">로그인하면 내 진행도를 볼 수 있습니다.</small>
+        </div>
+        <div class="summary-item"><span data-i18n="collectedTypes">수집 종류</span><strong id="ownedValue">—</strong></div>
+        <div class="summary-item"><span data-i18n="totalCopies">보유 수량</span><strong id="quantityValue">—</strong></div>
+      </section>
+
+      <p class="session-note" id="sessionNote" role="status" aria-live="polite" data-i18n="signInNote">보유 카드를 표시하려면 Telegram으로 로그인하세요.</p>
+
+      <form class="filters" id="filters" role="search">
+        <label class="search-field">
+          <span class="sr-only" data-i18n="searchLabel">카드 검색</span>
+          <input id="searchInput" type="search" autocomplete="off" placeholder="카드명, 세트 또는 번호 검색" data-i18n-placeholder="searchPlaceholder">
+        </label>
+        <label><span class="sr-only" data-i18n="grade">등급</span><select id="gradeFilter"><option value="all" data-i18n="allGrades">모든 등급</option></select></label>
+        <label><span class="sr-only" data-i18n="set">세트</span><select id="setFilter"><option value="all" data-i18n="allSets">모든 세트</option></select></label>
+        <label><span class="sr-only" data-i18n="ownership">보유 여부</span><select id="ownedFilter">
+          <option value="all" data-i18n="allCards">전체</option>
+          <option value="owned" data-i18n="owned">보유</option>
+          <option value="missing" data-i18n="missing">미보유</option>
+          <option value="archived" data-i18n="archived">아카이브</option>
+        </select></label>
+        <label><span class="sr-only" data-i18n="sort">정렬</span><select id="sortFilter">
+          <option value="set" data-i18n="sortSet">세트 순</option>
+          <option value="name" data-i18n="sortName">이름 순</option>
+          <option value="grade" data-i18n="sortGrade">높은 등급 순</option>
+          <option value="recent" data-i18n="sortRecent">최근 획득 순</option>
+        </select></label>
+      </form>
+
+      <div class="result-line"><span id="resultCount" data-i18n="loadingCards">카드 불러오는 중</span><button id="resetFilters" type="button" data-i18n="reset">초기화</button></div>
+      <div class="card-grid" id="cardGrid" aria-live="polite" aria-busy="true">
+        <p class="state-message" data-i18n="loadingCollection">도감을 불러오는 중입니다.</p>
+      </div>
+      <div class="load-more" id="loadMoreWrap" hidden><button id="loadMoreButton" type="button" data-i18n="loadMore">더 보기</button></div>
+    </section>
+
+    <section class="panel" data-panel="leaderboard" id="panel-leaderboard" role="tabpanel" hidden>
+      <div class="page-heading narrow">
+        <div>
+          <p class="eyebrow" data-i18n="archiveProgress">이번 주 Lucky Catch</p>
+          <h1 data-i18n="leaderboardTitle">리더보드</h1>
+          <p data-i18n="leaderboardDescription">이번 주 공개 포획 당첨 횟수만 표시하며 매주 KST에 새로 시작합니다.</p>
+        </div>
+      </div>
+      <div class="leaderboard" id="leaderboardList"><p class="state-message" data-i18n="loadingLeaderboard">리더보드를 불러오는 중입니다.</p></div>
+      <p class="fine-print" data-i18n="leaderboardPrivacy">동률은 같은 순위입니다. 가격, 자산, 도감 완성도와 Daily Pick 기록은 합산하지 않습니다.</p>
+    </section>
+
+    <section class="panel" data-panel="commands" id="panel-commands" role="tabpanel" hidden>
+      <div class="page-heading narrow">
+        <div><p class="eyebrow" data-i18n="botCommands">Renaiss 봇에서 사용</p><h1 data-i18n="commandsTitle">명령어</h1><p data-i18n="commandsDescription">게임 시작은 한 글자면 충분합니다. 버튼을 누르면 명령어가 복사됩니다.</p></div>
+      </div>
+      <div class="command-list">
+        <button class="command" type="button" data-copy="c"><code>c</code><span><strong data-i18n="commandCatch">공개 포획 참여</strong><small data-i18n="commandCatchHelp">카드가 나타났을 때 랜덤 추첨과 가격 추측에 참여합니다.</small></span><b data-i18n="copy">복사</b></button>
+        <button class="command" type="button" data-copy="/mycards"><code>/mycards</code><span><strong data-i18n="commandCards">내 컬렉션</strong><small data-i18n="commandCardsHelp">등급과 세트별 보유 카드를 확인합니다.</small></span><b data-i18n="copy">복사</b></button>
+        <button class="command" type="button" data-copy="/price"><code>/price</code><span><strong data-i18n="commandPrice">참고 가격</strong><small data-i18n="commandPriceHelp">검증된 Renaiss 참고 가격과 출처를 확인합니다.</small></span><b data-i18n="copy">복사</b></button>
+        <button class="command" type="button" data-copy="/flex"><code>/flex</code><span><strong data-i18n="commandFlex">포획 자랑하기</strong><small data-i18n="commandFlexHelp">운 좋게 잡은 카드를 그룹에 공유합니다.</small></span><b data-i18n="copy">복사</b></button>
+      </div>
+    </section>
+
+    <section class="panel" data-panel="guide" id="panel-guide" role="tabpanel" hidden>
+      <div class="page-heading narrow">
+        <div><p class="eyebrow" data-i18n="firstRound">첫 라운드</p><h1 data-i18n="guideTitle">빠른 가이드</h1><p data-i18n="guideDescription">핵심 게임은 Telegram 공개 그룹 안에서 끝납니다.</p></div>
+      </div>
+      <ol class="guide-list">
+        <li><span>1</span><div><strong data-i18n="guideOneTitle">카드가 나타나면 c 입력</strong><p data-i18n="guideOneBody">누적 자산과 무관한 랜덤 포획 추첨에 참여합니다.</p></div></li>
+        <li><span>2</span><div><strong data-i18n="guideTwoTitle">공개 전에 가격 추측</strong><p data-i18n="guideTwoBody">FMV가 숨겨진 상태에서 가격 범위를 고르고 안목을 시험합니다.</p></div></li>
+        <li><span>3</span><div><strong data-i18n="guideThreeTitle">Renaiss 근거와 함께 결과 확인</strong><p data-i18n="guideThreeBody">검증된 가격, 출처와 신뢰 상태를 그룹에서 함께 봅니다.</p></div></li>
+        <li><span>4</span><div><strong data-i18n="guideFourTitle">도감은 기록, Daily Pick은 별도</strong><p data-i18n="guideFourBody">수집 완성도는 자랑용이며 Daily Pick 결과나 점수가 되지 않습니다.</p></div></li>
+      </ol>
+      <div class="notice"><strong data-i18n="noTradingTitle">투자·거래 게임이 아닙니다.</strong><p data-i18n="noTradingBody">현금, 매수·매도, 수익 보장 또는 실물 카드 소유권을 제공하지 않습니다. 모든 가격은 실험적 참고 데이터입니다.</p></div>
+    </section>
+  </main>
+
+  <nav class="mobile-tabs" aria-label="모바일 주요 메뉴" data-i18n-aria="mobileNavigation" role="tablist">
+    <button class="tab is-active" type="button" role="tab" aria-selected="true" data-view="dex" data-i18n="tabDex">도감</button>
+    <button class="tab" type="button" role="tab" aria-selected="false" data-view="leaderboard" data-i18n="tabLeaderboard">리더보드</button>
+    <button class="tab" type="button" role="tab" aria-selected="false" data-view="commands" data-i18n="tabCommands">명령어</button>
+    <button class="tab" type="button" role="tab" aria-selected="false" data-view="guide" data-i18n="tabGuide">가이드</button>
+  </nav>
+
+  <footer>
+    <p data-i18n="collaborationNotice">TGPoke가 운영하는 Renaiss 콜라보 프로젝트 페이지이며 Renaiss 공식 홈페이지가 아닙니다.</p>
+  </footer>
+</body>
+</html>

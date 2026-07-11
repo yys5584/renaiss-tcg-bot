@@ -21,6 +21,12 @@ LAUNCHERS = (
         "renaiss_referral_service.log",
     ),
 )
+WEB_LAUNCHER = (
+    "start_renaiss_web.bat",
+    "renaiss_bot.web.app",
+    "renaiss_web_service.log",
+)
+ALL_LAUNCHERS = LAUNCHERS + (WEB_LAUNCHER,)
 
 
 def _copy_stream_runner(fake_root: Path) -> None:
@@ -38,7 +44,7 @@ def _copy_stream_runner(fake_root: Path) -> None:
     )
 
 
-@pytest.mark.parametrize(("filename", "module_name", "log_name"), LAUNCHERS)
+@pytest.mark.parametrize(("filename", "module_name", "log_name"), ALL_LAUNCHERS)
 def test_windows_launcher_uses_its_own_repository_root(filename, module_name, log_name):
     launcher = ROOT / "renaiss_bot" / filename
     source = launcher.read_text(encoding="utf-8")
@@ -69,6 +75,92 @@ def test_windows_launcher_uses_its_own_repository_root(filename, module_name, lo
     assert "-B -E -s -u" in source
     assert f"--module {module_name}" in source
     assert (launcher.parent / "..").resolve() == ROOT
+
+
+def test_web_launcher_requires_external_web_only_environment():
+    filename, _, _ = WEB_LAUNCHER
+    source = (ROOT / "renaiss_bot" / filename).read_text(encoding="utf-8")
+
+    assert "RENAISS_ENV_FILE" in source
+    assert "%ProgramData%\\Renaiss\\secrets\\web.env" in source
+    assert "RENAISS_ENV_FILE must be an absolute local file" in source
+    assert "RENAISS_ENV_FILE must be a regular file outside the source tree" in source
+    assert "pre-create the web-only RENAISS_ENV_FILE" in source
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows cmd launcher semantics")
+def test_web_launcher_refuses_missing_external_environment(tmp_path):
+    filename, _, log_name = WEB_LAUNCHER
+    fake_root = tmp_path / "standalone"
+    launcher_dir = fake_root / "renaiss_bot"
+    launcher_dir.mkdir(parents=True)
+    launcher = launcher_dir / filename
+    shutil.copy2(ROOT / "renaiss_bot" / filename, launcher)
+    log_dir = tmp_path / "external-logs"
+    log_dir.mkdir()
+    env = os.environ.copy()
+    env.update(
+        {
+            "RENAISS_PYTHON_EXE": sys.executable,
+            "RENAISS_ENV_FILE": str(tmp_path / "missing-web.env"),
+            "RENAISS_LOG_DIR": str(log_dir),
+        }
+    )
+
+    result = subprocess.run(
+        [env.get("COMSPEC", "cmd.exe"), "/d", "/c", str(launcher)],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "pre-create the web-only" in result.stderr.lower()
+    assert not (log_dir / log_name).exists()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows cmd launcher semantics")
+def test_web_launcher_runs_only_with_external_environment(tmp_path):
+    filename, module_name, log_name = WEB_LAUNCHER
+    fake_root = tmp_path / "standalone with spaces"
+    launcher_dir = fake_root / "renaiss_bot"
+    launcher_dir.mkdir(parents=True)
+    source = (ROOT / "renaiss_bot" / filename).read_text(encoding="utf-8")
+    source = source.replace(module_name, "renaiss_missing_web_module_for_test")
+    launcher = launcher_dir / filename
+    launcher.write_text(source, encoding="utf-8")
+    _copy_stream_runner(fake_root)
+    log_dir = tmp_path / "external logs"
+    log_dir.mkdir()
+    env_file = tmp_path / "secrets" / "web.env"
+    env_file.parent.mkdir()
+    env_file.write_text("RENAISS_WEB_PREVIEW=0\n", encoding="utf-8")
+    env = os.environ.copy()
+    env.update(
+        {
+            "RENAISS_PYTHON_EXE": sys.executable,
+            "RENAISS_ENV_FILE": str(env_file),
+            "RENAISS_LOG_DIR": str(log_dir),
+        }
+    )
+
+    result = subprocess.run(
+        [env.get("COMSPEC", "cmd.exe"), "/d", "/c", str(launcher)],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "renaiss_missing_web_module_for_test" in (
+        log_dir / log_name
+    ).read_text(encoding="utf-8")
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows cmd launcher semantics")
