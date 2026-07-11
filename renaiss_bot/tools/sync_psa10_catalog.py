@@ -82,7 +82,9 @@ def candidate_row(row: dict[str, Any], *, synced_at: datetime) -> dict[str, Any]
     href = str(row["href"]).strip()
     game = str(row.get("game") or row.get("_endpoint_game") or "").strip()
     category = "one_piece_tcg" if game == "one-piece" else "pokemon_tcg"
-    local_card_id = "renaiss-" + hashlib.sha256(href.encode("utf-8")).hexdigest()[:24]
+    digest = hashlib.sha256(href.encode("utf-8")).hexdigest()[:24]
+    # 릴리스 게이트의 provider-namespace 규칙(catalog:{category}:...)을 따른다.
+    local_card_id = f"catalog:{category}:renaiss-{digest}"
     variation = str(row.get("variation") or "").strip()
     metadata = {
         "variation": variation,
