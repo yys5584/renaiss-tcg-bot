@@ -731,6 +731,41 @@ async def test_telegram_live_gate_requires_admin_for_daily_pick(monkeypatch):
     assert "administrator" in result.detail
 
 
+async def test_telegram_live_gate_accepts_botfather_privacy_disabled(monkeypatch):
+    monkeypatch.setenv("RENAISS_BOT_TOKEN", "123456:test-secret")
+    monkeypatch.setenv("RENAISS_EXPECTED_BOT_ID", "123456")
+    monkeypatch.setenv("RENAISS_OFFICIAL_CHAT_ID", "-100123456")
+
+    class PrivacyDisabledBot:
+        def __init__(self, *, token):
+            self.bot = SimpleNamespace(
+                id=123456,
+                can_read_all_group_messages=True,
+            )
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get_webhook_info(self):
+            return SimpleNamespace(url="")
+
+        async def get_chat(self, chat_id):
+            return SimpleNamespace(type="supergroup")
+
+        async def get_chat_member(self, chat_id, user_id):
+            return SimpleNamespace(status="member")
+
+    monkeypatch.setattr("telegram.Bot", PrivacyDisabledBot)
+
+    result = await check_telegram_live(timeout_seconds=2)
+
+    assert result.ok
+    assert "plain-c visibility verified" in result.detail
+
+
 async def test_telegram_live_gate_short_circuits_wrong_identity(monkeypatch):
     monkeypatch.setenv("RENAISS_BOT_TOKEN", "123456:test-secret")
     monkeypatch.setenv("RENAISS_EXPECTED_BOT_ID", "123456")

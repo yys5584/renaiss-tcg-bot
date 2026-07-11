@@ -3,6 +3,8 @@
 > Renderer safety: the default renderer uses a fixed Pillow frame and never starts
 > Chromium. Keep image host/size allowlists enabled; rendering failures use the
 > text fallback. Telegram `file_id` values are cached per expected bot id.
+> Managed PostgreSQL project CAs stay outside the release tree and are selected
+> with `RENAISS_DB_SSL_CA_FILE`; never replace this with `RENAISS_DB_SSL_INSECURE=1`.
 >
 > Public `/flex` defaults to a shared 3-post daily room cap and a 300-second
 > minimum interval. Review `RENAISS_FLEX_ROOM_DAILY_LIMIT` and

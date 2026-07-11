@@ -6,6 +6,7 @@ import asyncio
 import logging
 import os
 import ssl
+from pathlib import Path
 from typing import Any
 
 import asyncpg
@@ -50,7 +51,14 @@ def database_tls_verification_disabled() -> bool:
 
 
 def _make_ssl() -> ssl.SSLContext:
-    ctx = ssl.create_default_context()
+    raw_ca_file = os.getenv("RENAISS_DB_SSL_CA_FILE", "").strip()
+    if raw_ca_file:
+        ca_file = Path(raw_ca_file).expanduser()
+        if not ca_file.is_absolute() or not ca_file.is_file():
+            raise RuntimeError("RENAISS_DB_SSL_CA_FILE must be an existing absolute file")
+        ctx = ssl.create_default_context(cafile=str(ca_file))
+    else:
+        ctx = ssl.create_default_context()
     insecure = database_tls_verification_disabled()
     if insecure:
         logger.warning(

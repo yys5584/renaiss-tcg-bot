@@ -30,6 +30,26 @@ def test_database_tls_insecure_mode_requires_explicit_opt_in(monkeypatch):
     assert context.check_hostname is False
 
 
+def test_database_tls_can_use_an_explicit_project_ca(monkeypatch, tmp_path):
+    ca_file = tmp_path / "project-ca.crt"
+    ca_file.write_text("test-ca", encoding="ascii")
+    context = Mock(verify_mode=ssl.CERT_REQUIRED, check_hostname=True)
+    create_context = Mock(return_value=context)
+    monkeypatch.setenv("RENAISS_DB_SSL_CA_FILE", str(ca_file))
+    monkeypatch.delenv("RENAISS_DB_SSL_INSECURE", raising=False)
+    monkeypatch.setattr(connection.ssl, "create_default_context", create_context)
+
+    assert _make_ssl() is context
+    create_context.assert_called_once_with(cafile=str(ca_file))
+
+
+def test_database_tls_rejects_a_missing_project_ca(monkeypatch, tmp_path):
+    monkeypatch.setenv("RENAISS_DB_SSL_CA_FILE", str(tmp_path / "missing.crt"))
+
+    with pytest.raises(RuntimeError, match="existing absolute file"):
+        _make_ssl()
+
+
 def test_database_pool_checkout_has_a_bounded_default(monkeypatch):
     class RawPool:
         def __init__(self):

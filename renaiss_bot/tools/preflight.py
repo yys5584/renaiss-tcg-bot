@@ -1265,17 +1265,36 @@ async def check_telegram_live(*, timeout_seconds: float = 10.0) -> CheckResult:
             "official chat is not a group or supergroup",
         )
     member_status = str(getattr(member, "status", "")).lower()
-    if member_status not in {"administrator", "creator", "owner"}:
+    privacy_disabled = bool(
+        getattr(identity, "can_read_all_group_messages", False)
+    )
+    is_administrator = member_status in {"administrator", "creator", "owner"}
+    daily_pick_requested = os.getenv("RENAISS_DAILY_PICK_ENABLED", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if daily_pick_requested and not is_administrator:
         return CheckResult(
             "Telegram live",
             False,
-            "official-room administrator status is required because BotFather "
-            "privacy cannot be verified read-only",
+            "official-room administrator status is required for Daily Pick membership checks",
+        )
+    if (
+        not is_administrator
+        and not privacy_disabled
+    ):
+        return CheckResult(
+            "Telegram live",
+            False,
+            "plain-c delivery requires either official-room administrator status "
+            "or BotFather privacy disabled",
         )
     return CheckResult(
         "Telegram live",
         True,
-        "bot identity, official group, and membership verified; "
+        "bot identity, official group, and plain-c visibility verified; "
         "plain-c delivery still requires a non-admin member E2E check",
     )
 
