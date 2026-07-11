@@ -632,7 +632,7 @@ async def catch_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             if update.effective_message:
                 try:
                     receipt = await update.effective_message.reply_text(
-                        f"🪙 <b>{escape(_display_name(update))}</b> inserted a coin! "
+                        f"🎴 <b>{escape(_display_name(update))}</b> opened a pack! "
                         f"({entry_count} in)",
                         parse_mode="HTML",
                         disable_notification=True,

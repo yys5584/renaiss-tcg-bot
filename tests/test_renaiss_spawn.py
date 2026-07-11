@@ -932,7 +932,7 @@ async def test_active_catch_survives_starter_database_failure(monkeypatch):
     # is the draw confirmation, never a starter/welcome message.
     message.reply_text.assert_awaited_once()
     receipt_text = message.reply_text.await_args.args[0]
-    assert "inserted a coin" in receipt_text
+    assert "opened a pack" in receipt_text
     assert "Welcome Card" not in receipt_text
     _active.clear()
 
