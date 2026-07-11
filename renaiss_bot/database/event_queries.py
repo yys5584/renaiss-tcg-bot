@@ -322,3 +322,40 @@ async def list_unfinished_spawns(*, limit: int = 50, after_id: int = 0) -> list[
         item["award_metadata"] = award_metadata if isinstance(award_metadata, dict) else {}
         result.append(item)
     return result
+
+async def get_runtime_setting(key: str) -> dict | None:
+    """Read one persisted runtime flag; missing or unreadable returns None."""
+    import json as _json
+
+    pool = await get_db()
+    async with pool.acquire() as conn:
+        raw = await conn.fetchval(
+            "SELECT value FROM renaiss_runtime_settings WHERE key = $1", key
+        )
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        try:
+            raw = _json.loads(raw)
+        except ValueError:
+            return None
+    return raw if isinstance(raw, dict) else None
+
+
+async def set_runtime_setting(key: str, value: dict) -> None:
+    """Persist one runtime flag across process restarts."""
+    import json as _json
+
+    pool = await get_db()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO renaiss_runtime_settings (key, value, updated_at)
+            VALUES ($1, $2::jsonb, now())
+            ON CONFLICT (key) DO UPDATE
+            SET value = EXCLUDED.value, updated_at = now()
+            """,
+            key,
+            _json.dumps(value),
+        )
+

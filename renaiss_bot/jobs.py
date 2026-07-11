@@ -15,7 +15,11 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest, Forbidden, NetworkError, RetryAfter, TimedOut
 from telegram.ext import Application, ContextTypes
 
-from renaiss_bot.database.event_queries import list_unfinished_spawns, log_event
+from renaiss_bot.database.event_queries import (
+    get_runtime_setting,
+    list_unfinished_spawns,
+    log_event,
+)
 from renaiss_bot.database.queries import get_catch_ranking
 from renaiss_bot.database.catalog_queries import (
     acquire_catalog_refresh_lease,
@@ -253,6 +257,25 @@ def _schedule_next_spawn(context: ContextTypes.DEFAULT_TYPE, delay: float) -> No
         name="renaiss_official_spawn",
         job_kwargs={"misfire_grace_time": None},
     )
+
+
+async def restore_spawn_burst_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """재시작·재배포 후 운영자가 켜둔 burst 모드를 복원한다 (fail-safe: 꺼짐)."""
+    from renaiss_bot.handlers.spawn import BURST_FLAG_KEY
+
+    try:
+        setting = await get_runtime_setting("spawn_burst")
+    except Exception as exc:
+        logger.warning("Burst state restore skipped: %s", exc)
+        return
+    if setting and setting.get("active") is True:
+        application = getattr(context, "application", None)
+        if application is not None and isinstance(getattr(application, "bot_data", None), dict):
+            application.bot_data[BURST_FLAG_KEY] = True
+            logger.info(
+                "Spawn burst mode restored from persisted state (interval=%ss).",
+                burst_interval_seconds(),
+            )
 
 
 async def spawn_loop_job(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -920,6 +943,12 @@ def register_jobs(application: Application) -> None:
     # 공식방 스폰: 무인 기본값은 그룹 노이즈를 줄인 2~4시간 가변 간격.
     if official_chat_id() is not None:
         minimum, maximum = spawn_interval_bounds()
+        job_queue.run_once(
+            restore_spawn_burst_job,
+            when=0,
+            name="renaiss_spawn_burst_restore",
+            job_kwargs={"misfire_grace_time": None},
+        )
         job_queue.run_once(
             spawn_loop_job,
             when=first_spawn_delay(),

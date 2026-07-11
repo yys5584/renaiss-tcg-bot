@@ -6,7 +6,8 @@ group admin status deliberately grants nothing, and an empty allowlist
 disables every control (fail closed). Non-operators get complete silence so
 the commands do not advertise themselves. Every action is recorded in the
 event ledger. Burst state lives in ``Application.bot_data`` only, so a
-process restart always returns to the pilot schedule.
+burst state persists in renaiss_runtime_settings so a redeploy or restart
+resumes the operator's chosen mode until /spawnoff.
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ import os
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from renaiss_bot.database.event_queries import log_event
+from renaiss_bot.database.event_queries import log_event, set_runtime_setting
 from renaiss_bot.handlers.message_cleanup import (
     command_delete_delay_seconds,
     delete_group_command_job,
@@ -32,6 +33,17 @@ from renaiss_bot.handlers.spawn import (
 logger = logging.getLogger(__name__)
 
 SPAWN_LOOP_JOB_NAME = "renaiss_official_spawn"
+BURST_SETTING_KEY = "spawn_burst"
+
+
+async def _persist_burst(active: bool, user_id: int) -> None:
+    """Best-effort persistence; the in-memory flag still rules this process."""
+    try:
+        await set_runtime_setting(
+            BURST_SETTING_KEY, {"active": active, "user_id": user_id}
+        )
+    except Exception as exc:
+        logger.warning("Burst state persistence failed (active=%s): %s", active, exc)
 
 
 def operator_user_ids() -> frozenset[int]:
@@ -109,13 +121,14 @@ async def spawn_on_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     interval = burst_interval_seconds()
     already_on = bool(application.bot_data.get(BURST_FLAG_KEY))
     application.bot_data[BURST_FLAG_KEY] = True
+    await _persist_burst(True, update.effective_user.id)
     _reschedule_spawn_loop(context, delay=1)
     message = update.effective_message
     chat_id = update.effective_chat.id
     if message is not None:
         reply = await message.reply_text(
             f"⚡ Burst mode {'already ' if already_on else ''}ON — spawning about every "
-            f"{interval}s until /spawnoff (a bot restart also returns to the pilot schedule).",
+            f"{interval}s until /spawnoff (survives restarts and redeploys).",
             disable_notification=True,
         )
         _schedule_reply_cleanup(context, reply)
@@ -135,6 +148,7 @@ async def spawn_off_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     application = context.application
     was_on = bool(application.bot_data.get(BURST_FLAG_KEY))
     application.bot_data[BURST_FLAG_KEY] = False
+    await _persist_burst(False, update.effective_user.id)
     from renaiss_bot.handlers.spawn import next_spawn_delay
 
     _reschedule_spawn_loop(context, delay=next_spawn_delay())

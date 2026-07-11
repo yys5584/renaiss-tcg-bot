@@ -181,3 +181,40 @@ def test_burst_env_bounds(monkeypatch):
     assert burst_daily_cap() == 5000
     assert spawn_burst_active(None) is False
     assert spawn_burst_active(SimpleNamespace(bot_data={})) is False
+
+async def test_burst_state_persists_and_restores(monkeypatch):
+    saved = {}
+
+    async def fake_set(key, value):
+        saved[key] = value
+
+    monkeypatch.setattr("renaiss_bot.handlers.spawn_admin.set_runtime_setting", fake_set)
+    context = _context()
+    await spawn_on_handler(_update(), context)
+    assert saved["spawn_burst"] == {"active": True, "user_id": ADMIN_ID}
+    await spawn_off_handler(_update(), context)
+    assert saved["spawn_burst"] == {"active": False, "user_id": ADMIN_ID}
+
+    # 재시작 복원: 저장된 active=True를 읽으면 프로세스 플래그가 켜진다.
+    from renaiss_bot.jobs import restore_spawn_burst_job
+
+    monkeypatch.setattr(
+        "renaiss_bot.jobs.get_runtime_setting",
+        AsyncMock(return_value={"active": True, "user_id": ADMIN_ID}),
+    )
+    application = SimpleNamespace(bot_data={})
+    await restore_spawn_burst_job(SimpleNamespace(application=application))
+    assert application.bot_data[BURST_FLAG_KEY] is True
+
+
+async def test_burst_restore_fails_safe_when_database_is_down(monkeypatch):
+    from renaiss_bot.jobs import restore_spawn_burst_job
+
+    monkeypatch.setattr(
+        "renaiss_bot.jobs.get_runtime_setting",
+        AsyncMock(side_effect=RuntimeError("db down")),
+    )
+    application = SimpleNamespace(bot_data={})
+    await restore_spawn_burst_job(SimpleNamespace(application=application))
+    assert BURST_FLAG_KEY not in application.bot_data
+

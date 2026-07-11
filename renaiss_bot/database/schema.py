@@ -24,6 +24,11 @@ async def create_tables(pool: asyncpg.Pool) -> None:
         )
         await conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS renaiss_runtime_settings (
+                key TEXT PRIMARY KEY,
+                value JSONB NOT NULL,
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            );
             CREATE TABLE IF NOT EXISTS renaiss_card_links (
                 id BIGSERIAL PRIMARY KEY,
                 local_card_id TEXT,
