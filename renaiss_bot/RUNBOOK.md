@@ -180,7 +180,7 @@ $env:RENAISS_REQUIRE_POSTGRES_TESTS='1'
 - `RENAISS_REFERRAL_CODE`가 실제 referral 코드인지 확인
 - 클릭 KPI를 사용할 때 tracker public URL이 HTTPS인지, secret이 32자 이상인지 확인
 - `RENAISS_API_BASE_URL`, `RENAISS_API_KEY`, `RENAISS_API_SECRET`이 공식 Partner 값인지 확인
-- 구조 조회 경로를 직접 probe한 뒤에만 `RENAISS_API_ITEM_BY_NO_PATH`를 설정한다. 2026-07-11 기준 문서의 `/v1/index/item-by-no`는 실제 API에서 404였고 공개 OpenAPI에도 없었다.
+- 현재 exact 계약은 `/v1/search`의 구조화된 `href`를 검증한 뒤 `/v1/cards/{game}/{set}/{card}`를 조회하는 `card-detail-v1`이다. 레거시 `RENAISS_API_ITEM_BY_NO_PATH`는 이 계약에서 설정하지 않는다.
 - Daily Pick은 exact identity, freshness, numeric confidence, source count와 명시적 `median` valuation method가 실제 응답에서 확인된 뒤에만 `RENAISS_DAILY_PICK_ENABLED=1`로 연다.
 - Daily Pick을 요청할 때는 봇을 콜라보 게임방 관리자로 두고 `RENAISS_DAILY_PICK_PROBE_CARD_NAME`,
   `RENAISS_DAILY_PICK_PROBE_SET_NAME`, `RENAISS_DAILY_PICK_PROBE_ITEM_NO`에 실제
@@ -351,7 +351,7 @@ import하지 않는다. 서명 매니페스트는 현재 collection-only이고 �
 Partner `item-by-no` 응답 fixture와 필드 계약을 공식 확인하기 전에는
 `RENAISS_API_EXACT_CONTRACT`와 `RENAISS_API_EXACT_VALUATION_METHOD`를 비워 둔다.
 확인된 v1 fixture가 경쟁 가격 필드를 명시적으로 Median으로 표기하고 계약 테스트가
-통과한 배포에서만 각각 `item-by-no-v1`, `median`으로 설정한다. 환경변수는 출처 근거를
+통과한 배포에서만 각각 `card-detail-v1`, `median`으로 설정한다. 환경변수는 출처 근거를
 대신하지 않는다. 값이 없거나 다르거나 실제 응답 method가 Median이 아니면
 structural 응답도 candidate로 남고 Daily Pick admission은 열리지 않는다.
 키 교체 시에는 `old_fingerprint,new_fingerprint`처럼 두 지문을 잠시 함께 허용하고,

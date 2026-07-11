@@ -13,7 +13,10 @@ from renaiss_bot.services.client import (
     RenaissAPICooldown,
     RenaissAPIUnavailable,
     _ensure_partner_api_available,
+    _card_detail_candidate_matches,
+    _card_detail_url_from_href,
     _headers,
+    _normalized_card_detail_payload,
     _structural_url,
     exact_partner_contract_enabled,
     fetch_official_price,
@@ -154,8 +157,71 @@ def test_exact_contract_is_closed_until_approved_fixture_version(monkeypatch):
     assert not exact_partner_contract_enabled()
     monkeypatch.setenv("RENAISS_API_EXACT_CONTRACT", "unverified-v2")
     assert not exact_partner_contract_enabled()
-    monkeypatch.setenv("RENAISS_API_EXACT_CONTRACT", "item-by-no-v1")
+    monkeypatch.setenv("RENAISS_API_EXACT_CONTRACT", "card-detail-v1")
     assert exact_partner_contract_enabled()
+
+
+def test_card_detail_candidate_requires_full_structured_identity(monkeypatch):
+    monkeypatch.setenv("RENAISS_API_DEFAULT_RAW_GRADE", "RAW A")
+    card = CardIdentity(
+        category="pokemon_tcg",
+        card_name="Lickitung",
+        set_code="SMP",
+        set_name="Movie Special Pack",
+        collector_number="22",
+        language="Japanese",
+        grade="R",
+        metadata={"variation": "Common", "market_grade": "RAW A"},
+    )
+    candidate = {
+        "name": "Lickitung",
+        "setName": "Movie Special Pack",
+        "setCode": "SMP",
+        "cardNumber": "22",
+        "variation": "Common",
+        "language": "Japanese",
+        "company": "RAW",
+        "grade": "A",
+        "href": "/card/pokemon/movie-special-pack/22-lickitung-raw-A",
+    }
+    assert _card_detail_candidate_matches(card, candidate)
+    assert not _card_detail_candidate_matches(card, {**candidate, "cardNumber": "23"})
+
+
+def test_card_detail_href_is_strictly_converted(monkeypatch):
+    monkeypatch.setenv("RENAISS_API_BASE_URL", "https://api.renaissos.com")
+    assert _card_detail_url_from_href(
+        "/card/pokemon/base-set/4-charizard-psa-10-abcd1234"
+    ) == (
+        "https://api.renaissos.com/v1/cards/pokemon/base-set/"
+        "4-charizard-psa-10-abcd1234"
+    )
+    assert _card_detail_url_from_href("https://evil.example/card/pokemon/a/b") is None
+    assert _card_detail_url_from_href("/card/pokemon/a/b?token=secret") is None
+
+
+def test_card_detail_normalization_pins_median_and_latest_observation():
+    payload = {
+        "name": "Charizard",
+        "updatedAt": "2026-07-07T08:24:23Z",
+        "lastSaleAt": "2026-07-10T21:00:00Z",
+        "methods": [
+            {"method": "mean", "priceUsdCents": 42977},
+            {
+                "method": "median",
+                "priceUsdCents": 42042,
+                "confidence": "prime",
+                "sourceCount": 2,
+                "observationCount": 51,
+            },
+        ],
+    }
+    normalized = _normalized_card_detail_payload(payload)
+    assert normalized is not None
+    assert normalized["best_estimate"] == 420.42
+    assert normalized["valuation_method"] == "median"
+    assert normalized["sourceCount"] == 2
+    assert normalized["priceUpdatedAt"].startswith("2026-07-10T21:00:00")
 
 
 @pytest.mark.parametrize(

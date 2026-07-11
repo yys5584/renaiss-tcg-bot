@@ -158,6 +158,25 @@ def test_pick_gate_requires_explicit_median_valuation_method(method):
     assert not market_card_eligible(card, price)
 
 
+def test_pick_gate_accepts_official_categorical_confidence_without_invented_score():
+    card = _card()
+    price = RenaissPrice(
+        status="exact",
+        source="renaiss-card-detail-api",
+        confidence="prime",
+        confidence_score=None,
+        source_count=2,
+        observation_count=51,
+        valuation_method="median",
+        asset_url="https://index.renaissos.com/card/pokemon/base-set/charizard",
+        fmv_usd=420.42,
+        price_updated_at=datetime.now(timezone.utc),
+        source_identity_key=card_identity_key(card),
+    )
+
+    assert market_card_eligible(card, price)
+
+
 def test_pick_gate_rejects_stale_or_low_confidence_price():
     stale = RenaissPrice(
         status="exact",

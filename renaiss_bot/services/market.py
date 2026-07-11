@@ -19,6 +19,7 @@ VERIFIED_PRICE_SOURCES = frozenset(
     {
         "renaiss-index-api",
         "renaiss-index-api:item-by-no",
+        "renaiss-card-detail-api",
     }
 )
 REQUIRED_VALUATION_METHOD = "median"
@@ -85,9 +86,17 @@ def daily_pick_configuration_issues() -> list[str]:
         issues.append("RENAISS_API_KEY is missing")
     if not os.getenv("RENAISS_API_SECRET", "").strip():
         issues.append("RENAISS_API_SECRET is missing")
-    if not os.getenv("RENAISS_API_ITEM_BY_NO_PATH", "").strip():
-        issues.append("RENAISS_API_ITEM_BY_NO_PATH is missing")
-    from renaiss_bot.services.client import EXACT_PARTNER_CONTRACT, exact_partner_contract_enabled
+    from renaiss_bot.services.client import (
+        EXACT_PARTNER_CONTRACT,
+        card_detail_contract_enabled,
+        exact_partner_contract_enabled,
+    )
+
+    if (
+        not card_detail_contract_enabled()
+        and not os.getenv("RENAISS_API_ITEM_BY_NO_PATH", "").strip()
+    ):
+        issues.append("RENAISS_API_ITEM_BY_NO_PATH is missing for the legacy contract")
 
     if not exact_partner_contract_enabled():
         issues.append(
@@ -112,7 +121,7 @@ def exact_price_lookup_configured() -> bool:
     """Whether exact Partner lookup can run independently of Daily Pick."""
     if os.getenv("RENAISS_API_MOCK_JSON", "").strip():
         return False
-    from renaiss_bot.services.client import exact_partner_contract_enabled
+    from renaiss_bot.services.client import card_detail_contract_enabled, exact_partner_contract_enabled
 
     if not exact_partner_contract_enabled():
         return False
@@ -121,14 +130,10 @@ def exact_price_lookup_configured() -> bool:
         != REQUIRED_VALUATION_METHOD
     ):
         return False
-    return all(
-        os.getenv(name, "").strip()
-        for name in (
-            "RENAISS_API_KEY",
-            "RENAISS_API_SECRET",
-            "RENAISS_API_ITEM_BY_NO_PATH",
-        )
-    )
+    required = ["RENAISS_API_KEY", "RENAISS_API_SECRET"]
+    if not card_detail_contract_enabled():
+        required.append("RENAISS_API_ITEM_BY_NO_PATH")
+    return all(os.getenv(name, "").strip() for name in required)
 
 
 def daily_pick_enabled() -> bool:
@@ -243,14 +248,13 @@ def market_card_eligibility_issues(
         0.0,
         _env_number("RENAISS_DAILY_PICK_MIN_CONFIDENCE_SCORE", 0.7),
     )
-    if (
-        price.confidence_score is None
-        or isinstance(price.confidence_score, bool)
+    if price.confidence_score is not None and (
+        isinstance(price.confidence_score, bool)
         or not math.isfinite(price.confidence_score)
         or price.confidence_score > 1.0
         or price.confidence_score <= min_confidence
     ):
-        issues.append("numeric confidence score is missing or below threshold")
+        issues.append("numeric confidence score is invalid or below threshold")
     min_sources = max(1, int(_env_number("RENAISS_DAILY_PICK_MIN_SOURCE_COUNT", 2)))
     if (
         price.source_count is None

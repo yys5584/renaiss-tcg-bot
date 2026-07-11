@@ -27,7 +27,8 @@ from renaiss_bot.services.models import CardIdentity, GradeOffer, RenaissPrice, 
 from renaiss_bot.services.referral import add_referral, build_search_url, renaiss_base_url
 
 logger = logging.getLogger(__name__)
-EXACT_PARTNER_CONTRACT = "item-by-no-v1"
+EXACT_PARTNER_CONTRACT = "card-detail-v1"
+LEGACY_EXACT_PARTNER_CONTRACT = "item-by-no-v1"
 _partner_request_semaphore: asyncio.Semaphore | None = None
 _partner_request_semaphore_loop = None
 _partner_request_semaphore_limit = 0
@@ -158,6 +159,13 @@ def _api_secret() -> str:
 
 def exact_partner_contract_enabled() -> bool:
     """Keep structural exact scoring closed until an official fixture is approved."""
+    return os.getenv("RENAISS_API_EXACT_CONTRACT", "").strip() in {
+        EXACT_PARTNER_CONTRACT,
+        LEGACY_EXACT_PARTNER_CONTRACT,
+    }
+
+
+def card_detail_contract_enabled() -> bool:
     return os.getenv("RENAISS_API_EXACT_CONTRACT", "").strip() == EXACT_PARTNER_CONTRACT
 
 
@@ -495,7 +503,11 @@ def _canonical_market_grade(
     }
     if "raw" in tokens:
         qualifiers = tuple(token for token in tokens if token != "raw")
-        return ("raw", None, ()) if not qualifiers and not graders and not numeric_tokens else None
+        if graders or numeric_tokens:
+            return None
+        if not qualifiers or (len(qualifiers) == 1 and qualifiers[0] in {"a", "b", "c", "d"}):
+            return ("raw", None, qualifiers)
+        return None
     if len(graders) != 1 or len(numeric_tokens) != 1:
         return None
     without_number = re.sub(grade_pattern, " ", normalized)
@@ -908,6 +920,174 @@ def _search_url(card: CardIdentity) -> str:
     return f"{base}{path}?{urlencode(params)}"
 
 
+def _card_detail_candidate_matches(
+    card: CardIdentity,
+    candidate: Mapping[str, Any],
+) -> bool:
+    """Match every official structured identity field before following href."""
+    if _normalize(_string_from(candidate, _NAME_KEYS)) != _normalize(card.card_name):
+        return False
+    returned_sets = {
+        _normalize(value)
+        for value in (
+            _string_from(candidate, ("setName", "set_name")),
+            _string_from(candidate, ("setCode", "set_code")),
+        )
+        if value
+    }
+    expected_sets = {
+        _normalize(value) for value in (card.set_name, card.set_code) if value.strip()
+    }
+    if not returned_sets or not expected_sets or returned_sets.isdisjoint(expected_sets):
+        return False
+    returned_number = _normalize(
+        _string_from(candidate, ("cardNumber", "collector_number", "number"))
+    )
+    if not returned_number or returned_number != _normalize(card.collector_number):
+        return False
+    returned_language = _normalize(
+        _string_from(candidate, ("language", "languageCode", "lang"))
+    )
+    language_aliases = {_normalize(card.language), _normalize(_language_tag(card.language))} - {""}
+    if not returned_language or returned_language not in language_aliases:
+        return False
+    expected_variation = _normalize(
+        str((card.metadata or {}).get("variation") or (card.metadata or {}).get("variant") or "")
+    )
+    returned_variation = _normalize(
+        _string_from(candidate, ("variation", "variant", "printing", "finish"))
+    )
+    if returned_variation != expected_variation:
+        return False
+    return _price_tier_matches(card, candidate)
+
+
+def _card_detail_url_from_href(href: str | None) -> str | None:
+    """Convert an official public card href into the authenticated detail route."""
+    value = (href or "").strip()
+    if not value:
+        return None
+    parsed = urlparse(value)
+    if parsed.scheme or parsed.netloc:
+        allowed_public_hosts = {"index.renaissos.com", "renaiss.xyz", "www.renaiss.xyz"}
+        if (
+            parsed.scheme != "https"
+            or parsed.hostname is None
+            or parsed.hostname.lower() not in allowed_public_hosts
+            or parsed.username
+            or parsed.password
+            or parsed.port not in {None, 443}
+            or parsed.query
+            or parsed.fragment
+        ):
+            return None
+        path = parsed.path
+    else:
+        if not value.startswith("/") or "?" in value or "#" in value:
+            return None
+        path = value
+    if not path.startswith("/card/"):
+        return None
+    detail_path = path.replace("/card/", "/v1/cards/", 1)
+    segments = [segment for segment in detail_path.split("/") if segment]
+    if len(segments) != 5 or segments[:2] != ["v1", "cards"]:
+        return None
+    return f"{_api_base()}{detail_path}"
+
+
+def _normalized_card_detail_payload(payload: Any) -> Mapping[str, Any] | None:
+    """Pin the scored FMV to the one explicit official median method."""
+    if not isinstance(payload, Mapping):
+        return None
+    methods = payload.get("methods")
+    if not isinstance(methods, list):
+        return None
+    medians = [
+        method
+        for method in methods
+        if isinstance(method, Mapping)
+        and str(method.get("method") or "").strip().lower() == "median"
+        and (_float_or_none(method.get("priceUsdCents")) or 0) > 0
+    ]
+    if len(medians) != 1:
+        return None
+    median = medians[0]
+    normalized = dict(payload)
+    normalized["best_estimate"] = float(median["priceUsdCents"]) / 100
+    normalized["valuation_method"] = "median"
+    for target, source in (
+        ("confidence", "confidence"),
+        ("sourceCount", "sourceCount"),
+        ("observationCount", "observationCount"),
+    ):
+        if median.get(source) is not None:
+            normalized[target] = median[source]
+    timestamps = []
+    for key in ("updatedAt", "lastSaleAt"):
+        value = payload.get(key)
+        if not value:
+            continue
+        try:
+            parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        timestamps.append(parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc))
+    if timestamps:
+        normalized["priceUpdatedAt"] = max(timestamps).astimezone(timezone.utc).isoformat()
+    return normalized
+
+
+async def _fetch_card_detail_price(
+    card: CardIdentity,
+    session: aiohttp.ClientSession,
+) -> RenaissPrice | None:
+    metadata = card.metadata or {}
+    stored_href = str(
+        metadata.get("renaiss_href")
+        or metadata.get("price_asset_url")
+        or metadata.get("asset_url")
+        or ""
+    ).strip()
+    detail_url = _card_detail_url_from_href(stored_href)
+    if detail_url is None:
+        async with session.get(_search_url(card), allow_redirects=False) as response:
+            if response.status == 404:
+                return None
+            if response.status == 429:
+                await _record_partner_rate_limit(response)
+            response.raise_for_status()
+            search_payload = await response.json(content_type=None)
+        matches = [
+            candidate
+            for candidate in _iter_candidates(search_payload)
+            if _card_detail_candidate_matches(card, candidate)
+        ]
+        detail_urls = {
+            url
+            for candidate in matches
+            if (url := _card_detail_url_from_href(_string_from(candidate, ("href",))))
+        }
+        if len(detail_urls) != 1:
+            return None
+        detail_url = next(iter(detail_urls))
+    async with session.get(detail_url, allow_redirects=False) as response:
+        if response.status == 404:
+            return None
+        if response.status == 429:
+            await _record_partner_rate_limit(response)
+        response.raise_for_status()
+        detail_payload = await response.json(content_type=None)
+    normalized = _normalized_card_detail_payload(detail_payload)
+    if normalized is None:
+        return None
+    return parse_renaiss_price_payload(
+        card,
+        normalized,
+        exact_identity=True,
+        source="renaiss-card-detail-api",
+    )
+
+
 async def fetch_official_price(
     card: CardIdentity,
     *,
@@ -929,6 +1109,8 @@ async def fetch_official_price(
     async with _partner_request_guard(timeout_seconds=timeout_seconds):
         timeout = aiohttp.ClientTimeout(total=timeout_seconds)
         async with aiohttp.ClientSession(timeout=timeout, headers=_headers()) as session:
+            if card_detail_contract_enabled():
+                return await _fetch_card_detail_price(card, session)
             async with session.get(url, allow_redirects=False) as response:
                 if response.status == 404:
                     return None
