@@ -176,24 +176,25 @@ def _collection_web_url() -> str:
     ).strip()
 
 
+_DIVIDER = "━" * 18
+
+
 def _portfolio_text(stats: PortfolioStats) -> str:
     achievement_count = len(stats.unlocked_achievements)
     total_achievements = len(stats.achievements)
-    lines = ["🎴 <b>Renaiss Collection</b>", ""]
+    lines = [_DIVIDER, "🎴 <b>RENAISS COLLECTION</b>", _DIVIDER]
 
     value = _format_money(stats.total_value_usd)
     if value != "-":
         pending = (
-            f" · {stats.unpriced_cards} awaiting a verified price"
-            if stats.unpriced_cards > 0
-            else ""
+            f" <i>({stats.unpriced_cards} pending)</i>" if stats.unpriced_cards > 0 else ""
         )
-        lines.append(f"💰 Est. value <b>{value}</b>{pending}")
+        lines.append(f"💰 <b>Value</b>   {value}{pending}")
     else:
-        lines.append("💰 Est. value <b>pending</b> — verified prices update twice a day.")
+        lines.append("💰 <b>Value</b>   <i>pending — prices verify twice a day</i>")
     lines.append(
-        f"📚 <b>{stats.total_cards}</b> cards · <b>{stats.unique_cards}</b> unique"
-        f" · <b>{stats.sets}</b> sets"
+        f"📚 <b>Cards</b>   {stats.total_cards} · {stats.unique_cards} unique"
+        f" · {stats.sets} sets"
     )
     if stats.season_pool_total > 0:
         percent = stats.owned_in_pool / stats.season_pool_total * 100
@@ -202,16 +203,18 @@ def _portfolio_text(stats: PortfolioStats) -> str:
             bar_filled = max(1, bar_filled)
         bar = "▰" * bar_filled + "▱" * (10 - bar_filled)
         lines.append(
-            f"📈 Season pool {bar} <b>{stats.owned_in_pool} / {stats.season_pool_total}</b>"
-            f" ({percent:.1f}%)"
+            f"📈 <b>Pool</b>    {bar} {stats.owned_in_pool}/{stats.season_pool_total}"
+            f" · {percent:.1f}%"
         )
     grade_line = _grade_line(stats.grade_counts)
     if grade_line != "-":
-        lines.append(f"🏅 {escape(grade_line)}")
+        lines.append(f"🏅 <b>Grades</b>  {escape(grade_line)}")
     if len(stats.category_counts) > 1:
-        lines.append(f"🗂 {_category_rows(stats.category_counts)}")
+        lines.append(f"🗂 <b>Mix</b>     {_category_rows(stats.category_counts)}")
 
-    lines.extend(["", f"🏆 <b>Achievements</b> {achievement_count}/{total_achievements}"])
+    lines.extend(
+        [_DIVIDER, f"🏆 <b>ACHIEVEMENTS</b> {achievement_count}/{total_achievements}"]
+    )
     unlocked_titles = [escape(item.title) for item in stats.unlocked_achievements[:5]]
     if unlocked_titles:
         lines.append("✅ " + " · ".join(unlocked_titles))
@@ -220,15 +223,15 @@ def _portfolio_text(stats: PortfolioStats) -> str:
 
     top_rows = _top_card_rows(stats.top_cards)
     if top_rows:
-        lines.extend(["", "⭐ <b>Top cards</b>", *top_rows])
+        lines.extend([_DIVIDER, "⭐ <b>TOP CARDS</b>", *top_rows])
 
     recent_rows = _recent_card_rows(stats.recent_cards)
     if recent_rows:
-        lines.extend(["", "🕘 <b>Recent adds</b>", *recent_rows])
+        lines.extend([_DIVIDER, "🕘 <b>RECENT ADDS</b>", *recent_rows])
 
     lines.extend(
         [
-            "",
+            _DIVIDER,
             f'🔗 <a href="{escape(_collection_web_url(), quote=True)}">'
             "Open the full web collection</a>",
             "<i>In-game collection only · no physical card or NFT ownership.</i>",
