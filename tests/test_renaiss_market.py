@@ -628,6 +628,15 @@ def test_register_jobs_connects_daily_pick_refresh_once(monkeypatch):
     assert len(bell_jobs) == 1
     assert bell_jobs[0][0][0] is publish_daily_pick_result_bell_job
     assert bell_jobs[0][1]["interval"] == 300
+    catalog_jobs = [
+        call
+        for call in queue.daily
+        if str(call[1].get("name") or "").startswith("renaiss_catalog_price_refresh_")
+    ]
+    assert [call[1]["name"] for call in catalog_jobs] == [
+        "renaiss_catalog_price_refresh_03",
+        "renaiss_catalog_price_refresh_15",
+    ]
 
 
 def test_register_jobs_fails_closed_without_job_queue():

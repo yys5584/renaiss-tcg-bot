@@ -44,6 +44,7 @@ from renaiss_bot.handlers.spawn import (
     spawn_tick,
     spawn_interval_bounds,
     spawn_daily_cap,
+    catch_window_seconds,
     spawn_quiet_hours,
     first_spawn_delay,
 )
@@ -410,8 +411,29 @@ def test_spawn_noise_guards_have_safe_defaults_and_wrap_kst(monkeypatch):
     assert not _hour_in_quiet_window(3, 3, 3)
 
 
+def test_season1_high_exposure_profile_is_supported(monkeypatch):
+    monkeypatch.delenv("RENAISS_SPAWN_INTERVAL_SECONDS", raising=False)
+    monkeypatch.setenv("RENAISS_SPAWN_CATCH_WINDOW_SECONDS", "20")
+    monkeypatch.setenv("RENAISS_SPAWN_INTERVAL_MIN_SECONDS", "30")
+    monkeypatch.setenv("RENAISS_SPAWN_INTERVAL_MAX_SECONDS", "30")
+    monkeypatch.setenv("RENAISS_SPAWN_DAILY_CAP", "2880")
+
+    assert catch_window_seconds() == 20
+    assert spawn_interval_bounds() == (30, 30)
+    assert spawn_daily_cap() == 2880
+
+
+def test_spawn_interval_cannot_overlap_the_catch_window(monkeypatch):
+    monkeypatch.delenv("RENAISS_SPAWN_INTERVAL_SECONDS", raising=False)
+    monkeypatch.setenv("RENAISS_SPAWN_CATCH_WINDOW_SECONDS", "40")
+    monkeypatch.setenv("RENAISS_SPAWN_INTERVAL_MIN_SECONDS", "30")
+    monkeypatch.setenv("RENAISS_SPAWN_INTERVAL_MAX_SECONDS", "30")
+
+    assert spawn_interval_bounds() == (45, 45)
+
+
 async def test_spawn_loop_reschedules_after_failed_tick(monkeypatch):
-    async def fail_tick(context):
+    async def fail_tick(context, **kwargs):
         raise RuntimeError("temporary failure")
 
     queue = SimpleNamespace(run_once=lambda *args, **kwargs: calls.append((args, kwargs)))
@@ -434,6 +456,7 @@ def test_registration_keeps_catch_and_removes_legacy_drop_flow():
         for handler in handlers
     }
     assert "catch_handler" in callbacks
+    assert "schedule_group_command_delete" in callbacks
     assert "cmd_market" in callbacks
     assert "on_market" in callbacks
     assert "cmd_rank" not in callbacks
@@ -967,10 +990,6 @@ async def test_concurrent_spawn_ticks_post_only_one_prompt(monkeypatch):
     roll = AsyncMock(return_value=Spawn(card=card, band="common", market_usd=60))
     monkeypatch.setattr("renaiss_bot.handlers.spawn.official_chat_id", lambda: -1001)
     monkeypatch.setattr("renaiss_bot.handlers.spawn.roll_spawn", roll)
-    monkeypatch.setattr(
-        "renaiss_bot.handlers.spawn.exact_price_lookup_configured",
-        lambda: False,
-    )
     monkeypatch.setattr("renaiss_bot.handlers.spawn.log_event", AsyncMock(return_value=True))
     bot = FakeBot()
     context = SimpleNamespace(bot=bot, job_queue=FakeJobQueue())
@@ -1010,10 +1029,6 @@ async def test_spawn_without_persistent_recovery_anchor_is_cancelled(monkeypatch
     monkeypatch.setattr(
         "renaiss_bot.handlers.spawn.roll_spawn",
         AsyncMock(return_value=Spawn(card=card, band="common", market_usd=60)),
-    )
-    monkeypatch.setattr(
-        "renaiss_bot.handlers.spawn.exact_price_lookup_configured",
-        lambda: False,
     )
     monkeypatch.setattr("renaiss_bot.handlers.spawn.log_event", AsyncMock(return_value=False))
     bot = FakeBot()

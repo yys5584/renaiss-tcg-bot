@@ -82,7 +82,7 @@ Pillow 프레임과 완성 PNG의 bounded cache는 프로세스 메모리만 사
 `file_id` 캐시는 PostgreSQL에 bot id별로 저장한다. secret 파일은 소스 밖의 외부
 경로에 두고 서비스 계정에는 `Read`만 허용한다.
 
-## 로컬 스모크 테스트
+## Local smoke test (로컬 스모크 테스트)
 
 ```powershell
 $env:RENAISS_SKIP_DB="1"

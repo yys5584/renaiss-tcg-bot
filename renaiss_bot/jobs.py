@@ -16,6 +16,13 @@ from telegram.error import BadRequest, Forbidden, NetworkError, RetryAfter, Time
 from telegram.ext import Application, ContextTypes
 
 from renaiss_bot.database.event_queries import list_unfinished_spawns, log_event
+from renaiss_bot.database.catalog_queries import (
+    acquire_catalog_refresh_lease,
+    finish_catalog_refresh_lease,
+    list_catalog_cards_for_refresh,
+    mark_catalog_refresh_attempted,
+    update_catalog_cached_price,
+)
 from renaiss_bot.database.market_queries import (
     acquire_market_refresh_job_lease,
     claim_due_pick_cards,
@@ -32,9 +39,11 @@ from renaiss_bot.database.market_queries import (
     settle_due_daily_picks,
 )
 from renaiss_bot.handlers.spawn import (
+    burst_interval_seconds,
     first_spawn_delay,
     next_spawn_delay,
     official_chat_id,
+    spawn_burst_active,
     spawn_interval_bounds,
     spawn_tick,
 )
@@ -55,6 +64,130 @@ KST = ZoneInfo("Asia/Seoul")
 TRACKING_CLEANUP_TIME_KST = time(hour=4, minute=10, tzinfo=KST)
 RESULT_BELL_POLL_SECONDS = 300
 MAX_REFRESH_INTERVAL_SECONDS = 86_400
+CATALOG_REFRESH_TIMES_KST = (
+    time(hour=3, minute=0, tzinfo=KST),
+    time(hour=15, minute=0, tzinfo=KST),
+)
+
+
+def _catalog_refresh_limit() -> int:
+    try:
+        return max(1, min(5000, int(os.getenv("RENAISS_CATALOG_REFRESH_LIMIT", "1000"))))
+    except ValueError:
+        return 1000
+
+
+def _catalog_refresh_enabled() -> bool:
+    raw = os.getenv("RENAISS_CATALOG_REFRESH_ENABLED", "1").strip().lower()
+    return raw in {"1", "true", "yes", "on"} and exact_price_lookup_configured()
+
+
+def _catalog_card(row: dict) -> CardIdentity:
+    metadata = row.get("metadata")
+    if isinstance(metadata, str):
+        try:
+            import json
+
+            metadata = json.loads(metadata)
+        except (TypeError, ValueError):
+            metadata = {}
+    metadata = metadata if isinstance(metadata, dict) else {}
+    source_payload = metadata.get("source_payload")
+    source_payload = source_payload if isinstance(source_payload, dict) else {}
+    market_grade = str(
+        metadata.get("market_grade")
+        or os.getenv("RENAISS_API_DEFAULT_MARKET_GRADE", "PSA 10 Gem Mint")
+        or "PSA 10 Gem Mint"
+    )
+    return CardIdentity(
+        category=str(row.get("category") or "pokemon_tcg"),
+        card_name=str(row.get("card_name") or ""),
+        # Keep the runtime/catalog grade in the identity key. The Partner
+        # request uses metadata.market_grade for the PSA 10 market asset.
+        grade=str(row.get("grade") or "R"),
+        set_code=str(row.get("set_code") or ""),
+        set_name=str(row.get("set_name") or ""),
+        collector_number=str(row.get("collector_number") or ""),
+        language=str(row.get("language") or ""),
+        local_card_id=str(row.get("local_card_id") or ""),
+        image_url=row.get("image_url"),
+        metadata={
+            "variation": str(
+                metadata.get("variation")
+                or metadata.get("variant")
+                or source_payload.get("variation")
+                or source_payload.get("variant")
+                or ""
+            ),
+            "market_grade": market_grade,
+        },
+    )
+
+
+async def refresh_catalog_prices_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Refresh the active season catalog in the background; public spawns stay DB-only."""
+    if not _catalog_refresh_enabled():
+        logger.info("Catalog price refresh skipped: exact Partner lookup is not configured.")
+        return
+    owner = f"renaiss-catalog:{os.getpid()}:{secrets.token_hex(12)}"
+    if not await acquire_catalog_refresh_lease(owner=owner, lease_seconds=7200):
+        logger.info("Catalog price refresh skipped: another instance owns the lease.")
+        return
+    refreshed = 0
+    missing = 0
+    failed = 0
+    status = "completed"
+    next_attempt_seconds = 39_600  # 11h: blocks duplicate instances, permits the 12h slot.
+    try:
+        rows = await list_catalog_cards_for_refresh(limit=_catalog_refresh_limit())
+        for index, row in enumerate(rows):
+            card = _catalog_card(row)
+            try:
+                price = await fetch_official_price(card, timeout_seconds=5.0)
+                if price is None:
+                    missing += 1
+                    await mark_catalog_refresh_attempted(local_card_id=card.local_card_id)
+                    continue
+                refreshed += int(
+                    await update_catalog_cached_price(
+                        local_card_id=card.local_card_id,
+                        price=price,
+                    )
+                )
+            except RenaissAPICooldown as exc:
+                failed += len(rows) - index
+                status = "rate_limited"
+                next_attempt_seconds = max(next_attempt_seconds, exc.retry_after_seconds)
+                break
+            except aiohttp.ClientResponseError as exc:
+                failed += 1
+                if exc.status == 429:
+                    status = "rate_limited"
+                    failed += len(rows) - index - 1
+                    break
+                logger.warning(
+                    "Catalog refresh response failed card=%s status=%s",
+                    card.local_card_id,
+                    exc.status,
+                )
+            except Exception as exc:
+                failed += 1
+                logger.warning("Catalog refresh failed card=%s: %s", card.local_card_id, exc)
+        if failed and status == "completed":
+            status = "completed_with_failures"
+        logger.info(
+            "Catalog cache refresh done: due=%s refreshed=%s missing=%s failed=%s.",
+            len(rows),
+            refreshed,
+            missing,
+            failed,
+        )
+    finally:
+        await finish_catalog_refresh_lease(
+            owner=owner,
+            status=status,
+            retry_after_seconds=next_attempt_seconds,
+        )
 
 
 def _daily_pick_refresh_limit() -> int:
@@ -105,10 +238,21 @@ async def cleanup_tracking_links_job(context: ContextTypes.DEFAULT_TYPE) -> None
 
 async def spawn_loop_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Run one spawn tick and always schedule the next quiet variable interval."""
+    application = getattr(context, "application", None)
+    burst = spawn_burst_active(application)
     try:
-        await spawn_tick(context)
+        await spawn_tick(context, burst=burst)
     finally:
-        delay = next_spawn_delay()
+        # Re-read the flag: /spawnoff during a long tick must win immediately.
+        if spawn_burst_active(application):
+            delay = burst_interval_seconds()
+        else:
+            delay = next_spawn_delay()
+        # Replace-by-name keeps exactly one loop even if an operator command
+        # rescheduled while this tick was still running.
+        jobs_by_name = getattr(context.job_queue, "get_jobs_by_name", None)
+        for job in jobs_by_name("renaiss_official_spawn") if callable(jobs_by_name) else ():
+            job.schedule_removal()
         context.job_queue.run_once(
             spawn_loop_job,
             when=delay,
@@ -589,6 +733,15 @@ def register_jobs(application: Application) -> None:
         name="renaiss_referral_link_cleanup",
         job_kwargs={"misfire_grace_time": None},
     )
+
+    for refresh_time in CATALOG_REFRESH_TIMES_KST:
+        job_queue.run_daily(
+            refresh_catalog_prices_job,
+            time=refresh_time,
+            name=f"renaiss_catalog_price_refresh_{refresh_time.hour:02d}",
+            job_kwargs={"misfire_grace_time": None},
+        )
+    logger.info("Catalog DB cache refresh scheduled at 03:00 and 15:00 KST.")
 
     # Admission can close instantly, but existing T+24 picks and outbox rows are
     # obligations. Drain workers therefore run whenever the DB-backed bot runs.

@@ -59,7 +59,9 @@ async def reserve_spawn_dispatch(
     """
     if chat_id == 0 or not lease_token or len(lease_token) > 128:
         raise ValueError("invalid spawn dispatch reservation")
-    cap = max(1, min(48, int(daily_cap)))
+    # Season-1-style official rooms can legitimately exceed 2,000 rounds/day.
+    # Keep a finite guard, but do not silently clamp the configured profile to 48.
+    cap = max(1, min(5000, int(daily_cap)))
     lease_for = max(30, min(3600, int(lease_seconds)))
     minimum_interval = max(0, min(86_400, int(minimum_interval_seconds)))
     start = max(0, min(23, int(quiet_start_hour)))

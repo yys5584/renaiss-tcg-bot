@@ -188,6 +188,35 @@ def test_card_detail_candidate_requires_full_structured_identity(monkeypatch):
     assert not _card_detail_candidate_matches(card, {**candidate, "cardNumber": "23"})
 
 
+def test_card_detail_candidate_accepts_official_set_and_variation_aliases():
+    card = CardIdentity(
+        category="pokemon_tcg",
+        card_name="Minccino",
+        set_code="sv5",
+        set_name="Temporal Forces",
+        collector_number="182",
+        language="English",
+        grade="AR",
+        metadata={
+            "variation": "Illustration Rare",
+            "market_grade": "PSA 10 Gem Mint",
+        },
+    )
+    candidate = {
+        "name": "Minccino",
+        "setName": "Pokemon TEF EN-Temporal Forces",
+        "setCode": "TEF",
+        "cardNumber": "182",
+        "variation": "Art Rare",
+        "language": "English",
+        "company": "PSA",
+        "grade": "10 Gem Mint",
+        "href": "/card/pokemon/temporal-forces/182-minccino-psa-10-example",
+    }
+
+    assert _card_detail_candidate_matches(card, candidate)
+
+
 def test_card_detail_href_is_strictly_converted(monkeypatch):
     monkeypatch.setenv("RENAISS_API_BASE_URL", "https://api.renaissos.com")
     assert _card_detail_url_from_href(

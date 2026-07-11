@@ -32,10 +32,8 @@ from renaiss_bot.database.event_queries import (
 from renaiss_bot.database.market_queries import register_market_reveal
 from renaiss_bot.database.queries import award_spawn_card, grant_first_c_starter
 from renaiss_bot.renderers.overlay import overlay_cache_key, render_overlay_card
-from renaiss_bot.services.client import fetch_official_price
 from renaiss_bot.services.market import (
     VERIFIED_PRICE_SOURCES,
-    exact_price_lookup_configured,
     market_card_eligible,
 )
 from renaiss_bot.services.media_cache import (
@@ -51,7 +49,6 @@ from renaiss_bot.services.tracking import build_tracked_url
 
 logger = logging.getLogger(__name__)
 
-CATCH_WINDOW_SECONDS = 40
 REVEAL_SUSPENSE_SECONDS = 1.5
 COHORT_EXPERIMENT_NAME = "first-c-insight-v1"
 
@@ -64,9 +61,17 @@ def _starter_grant_timeout_seconds() -> float:
     return min(3.0, max(0.05, configured))
 
 
+def catch_window_seconds() -> int:
+    """Return the configured entry window, including the 20s high-cadence profile."""
+    try:
+        return min(120, max(10, int(os.getenv("RENAISS_SPAWN_CATCH_WINDOW_SECONDS", "40"))))
+    except ValueError:
+        return 40
+
+
 def _configured_interval(name: str, default: int) -> int:
     try:
-        return max(60, int(os.getenv(name, str(default))))
+        return max(15, int(os.getenv(name, str(default))))
     except ValueError:
         return default
 
@@ -75,10 +80,14 @@ def spawn_interval_bounds() -> tuple[int, int]:
     legacy = os.getenv("RENAISS_SPAWN_INTERVAL_SECONDS", "").strip()
     if legacy:
         fixed = _configured_interval("RENAISS_SPAWN_INTERVAL_SECONDS", 7200)
+        fixed = max(catch_window_seconds() + 5, fixed)
         return fixed, fixed
     # Public conversation is the product, so unattended defaults stay sparse.
     # A pilot may tighten this deliberately after measuring group noise.
-    minimum = _configured_interval("RENAISS_SPAWN_INTERVAL_MIN_SECONDS", 7200)
+    minimum = max(
+        catch_window_seconds() + 5,
+        _configured_interval("RENAISS_SPAWN_INTERVAL_MIN_SECONDS", 7200),
+    )
     maximum = _configured_interval("RENAISS_SPAWN_INTERVAL_MAX_SECONDS", 14400)
     return minimum, max(minimum, maximum)
 
@@ -96,9 +105,34 @@ def first_spawn_delay() -> int:
         return 60
 
 
+BURST_FLAG_KEY = "renaiss_spawn_burst_active"
+
+
+def spawn_burst_active(application) -> bool:
+    """Whether the operator burst mode is on for this process."""
+    bot_data = getattr(application, "bot_data", None)
+    return bool(bot_data.get(BURST_FLAG_KEY)) if isinstance(bot_data, dict) else False
+
+
+def burst_interval_seconds() -> int:
+    try:
+        value = int(os.getenv("RENAISS_SPAWN_BURST_INTERVAL_SECONDS", "60"))
+    except ValueError:
+        value = 60
+    return min(3600, max(15, value))
+
+
+def burst_daily_cap() -> int:
+    try:
+        value = int(os.getenv("RENAISS_SPAWN_BURST_DAILY_CAP", "3000"))
+    except ValueError:
+        value = 3000
+    return min(5000, max(1, value))
+
+
 def spawn_daily_cap() -> int:
     try:
-        return max(1, min(48, int(os.getenv("RENAISS_SPAWN_DAILY_CAP", "6"))))
+        return max(1, min(5000, int(os.getenv("RENAISS_SPAWN_DAILY_CAP", "6"))))
     except ValueError:
         return 6
 
@@ -136,6 +170,22 @@ def _assign_cohort_variant(
     assignment_id = f"{COHORT_EXPERIMENT_NAME}-{digest.hex()[:16]}"
     variant = "catch-only" if digest[0] % 2 == 0 else "insight-layer"
     return assignment_id, variant
+
+
+async def _roll_spawn_category(rng: random.Random | None = None) -> str:
+    """Pick a spawn category weighted by active catalog size (DB-only, fail-safe)."""
+    try:
+        from renaiss_bot.database.catalog_queries import active_category_counts
+
+        counts = await active_category_counts()
+    except Exception:
+        counts = {}
+    weighted = [(category, count) for category, count in counts.items() if count > 0]
+    if not weighted:
+        return "pokemon_tcg"
+    chooser = rng or random
+    categories, weights = zip(*weighted)
+    return chooser.choices(categories, weights=weights, k=1)[0]
 
 
 def official_chat_id() -> int | None:
@@ -271,7 +321,7 @@ def _guess_keyboard(active: ActiveSpawn) -> InlineKeyboardMarkup | None:
 
 def _spawn_text(active: ActiveSpawn) -> str:
     spawn = active.spawn
-    remaining = max(0, CATCH_WINDOW_SECONDS - int(monotonic() - active.started_at))
+    remaining = max(0, catch_window_seconds() - int(monotonic() - active.started_at))
     action = "Type <code>c</code> to catch!"
     if active.price_options:
         action += " Then guess the market price below."
@@ -294,7 +344,7 @@ def _spawn_text(active: ActiveSpawn) -> str:
 
 
 def _spawn_window_open(active: ActiveSpawn) -> bool:
-    return monotonic() - active.started_at < CATCH_WINDOW_SECONDS
+    return monotonic() - active.started_at < catch_window_seconds()
 
 
 def _guess_distribution_lines(active: ActiveSpawn) -> list[str]:
@@ -322,13 +372,18 @@ def _spawn_event_metadata(active: ActiveSpawn) -> dict:
         "variant": active.variant,
         "message_id": active.message_id,
         "closes_at": (
-            datetime.now(timezone.utc) + timedelta(seconds=CATCH_WINDOW_SECONDS)
+            datetime.now(timezone.utc) + timedelta(seconds=catch_window_seconds())
         ).isoformat(),
     }
 
 
-async def spawn_tick(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """설정된 주기로 공식방에 스폰. 이미 진행 중이면 스킵."""
+async def spawn_tick(context: ContextTypes.DEFAULT_TYPE, *, burst: bool = False) -> None:
+    """설정된 주기로 공식방에 스폰. 이미 진행 중이면 스킵.
+
+    ``burst``는 운영자 force/연속 모드다. 파일럿 일일 캡·조용시간·최소 간격 대신
+    별도의 burst 상한을 쓰지만, 같은 DB dispatch gate를 통과하므로 다중 인스턴스
+    중복 스폰과 무제한 게시는 여전히 차단된다.
+    """
     chat_id = official_chat_id()
     if chat_id is None:
         return
@@ -341,16 +396,16 @@ async def spawn_tick(context: ContextTypes.DEFAULT_TYPE) -> None:
     dispatch_held = False
     posted_with_anchor = False
     try:
-        quiet_start, quiet_end = spawn_quiet_hours()
+        quiet_start, quiet_end = (0, 0) if burst else spawn_quiet_hours()
         try:
             reservation = await reserve_spawn_dispatch(
                 chat_id=chat_id,
                 lease_token=dispatch_token,
-                daily_cap=spawn_daily_cap(),
+                daily_cap=burst_daily_cap() if burst else spawn_daily_cap(),
                 quiet_start_hour=quiet_start,
                 quiet_end_hour=quiet_end,
-                lease_seconds=CATCH_WINDOW_SECONDS + 30,
-                minimum_interval_seconds=spawn_interval_bounds()[0],
+                lease_seconds=catch_window_seconds() + 30,
+                minimum_interval_seconds=0 if burst else spawn_interval_bounds()[0],
             )
         except Exception as exc:
             logger.error("Spawn dispatch gate unavailable; failing closed: %s", exc)
@@ -364,20 +419,17 @@ async def spawn_tick(context: ContextTypes.DEFAULT_TYPE) -> None:
             )
             return
         dispatch_held = True
-        spawn = await roll_spawn("pokemon_tcg")
+        spawn = await roll_spawn(await _roll_spawn_category())
+        if spawn is None:
+            # 선택된 카테고리 풀이 비어 있으면 기본 카테고리로 한 번 더 시도한다.
+            spawn = await roll_spawn("pokemon_tcg")
         if spawn is None:
             logger.debug("Spawn tick: empty pool, skipped.")
             return
 
+        # The public loop is DB-only. Twice-daily background refreshes persist
+        # exact evidence; an API outage must never delay or stop a spawn.
         reference_price = _catalog_reference_price(spawn)
-        if exact_price_lookup_configured():
-            try:
-                official_price = await fetch_official_price(spawn.card, timeout_seconds=5.0)
-            except Exception as exc:
-                logger.warning("Spawn exact-price lookup failed card=%s: %s", spawn.card.card_name, exc)
-            else:
-                if official_price is not None:
-                    reference_price = official_price
         verified_price = reference_price if market_card_eligible(spawn.card, reference_price) else None
         if verified_price and verified_price.fmv_usd and verified_price.fmv_usd > 0:
             spawn = Spawn(
@@ -456,7 +508,7 @@ async def spawn_tick(context: ContextTypes.DEFAULT_TYPE) -> None:
 
         context.job_queue.run_once(
             _resolve_job,
-            when=CATCH_WINDOW_SECONDS,
+            when=catch_window_seconds(),
             data=chat_id,
             name=f"renaiss_spawn_resolve_{chat_id}_{active.message_id}",
             job_kwargs={"misfire_grace_time": None},

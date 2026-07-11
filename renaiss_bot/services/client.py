@@ -472,6 +472,31 @@ def _normalize(value: str | None) -> str:
     return " ".join((value or "").lower().replace("-", " ").split())
 
 
+def _normalize_set_identity(value: str | None) -> str:
+    """Normalize official provider prefixes without weakening set identity."""
+    normalized = _normalize(value)
+    normalized = re.sub(
+        r"^pokemon\s+[^\s]+\s+(?:en|english)\s+",
+        "",
+        normalized,
+    )
+    normalized = re.sub(
+        r"^pokemon\s+(?:japanese|jp)\s+[^\s]+\s+",
+        "",
+        normalized,
+    )
+    return normalized
+
+
+def _normalize_variation(value: str | None) -> str:
+    """Collapse naming aliases used by different official Pokemon feeds."""
+    normalized = _normalize(value)
+    return {
+        "art rare": "illustration rare",
+        "special art rare": "special illustration rare",
+    }.get(normalized, normalized)
+
+
 def _market_grade(card: CardIdentity) -> str:
     metadata = card.metadata or {}
     explicit = str(
@@ -630,15 +655,18 @@ def _structural_identity_matches(
     ignored query parameter, or malformed response must remain collection-only.
     """
     mappings = _identity_mappings(payload, best)
-    returned_sets = _identity_values(
-        mappings,
-        ("set_name", "setName", "set_code", "setCode", "set", "series_code", "collection"),
-    )
-    expected_sets = {
+    returned_set_names = {
         normalized
-        for value in (card.set_name, card.set_code)
-        if (normalized := _normalize(value))
+        for mapping in mappings
+        if (value := _string_from(mapping, ("set_name", "setName"))) is not None
+        if (normalized := _normalize_set_identity(value))
     }
+    returned_set_codes = _identity_values(
+        mappings,
+        ("set_code", "setCode", "set", "series_code", "collection"),
+    )
+    expected_set_names = {_normalize_set_identity(card.set_name)} - {""}
+    expected_set_codes = {_normalize(card.set_code)} - {""}
     returned_numbers = _identity_values(
         mappings,
         ("collector_number", "collectorNumber", "cardNumber", "number", "card_number", "item_no", "itemNumber"),
@@ -651,10 +679,13 @@ def _structural_identity_matches(
     expected_language = _normalize(_language_tag(card.language))
     language_aliases = {expected_language, _normalize(card.language)} - {""}
 
-    if (
-        not expected_sets
-        or not returned_sets
-        or not returned_sets.issubset(expected_sets)
+    if returned_set_names and expected_set_names:
+        if not returned_set_names.issubset(expected_set_names):
+            return False
+    elif not (
+        returned_set_codes
+        and expected_set_codes
+        and returned_set_codes.issubset(expected_set_codes)
     ):
         return False
     if (
@@ -670,17 +701,19 @@ def _structural_identity_matches(
     ):
         return False
 
-    expected_variation = _normalize(
+    expected_variation = _normalize_variation(
         str((card.metadata or {}).get("variation") or (card.metadata or {}).get("variant") or "")
     )
     variation_keys = ("variation", "variant", "printing", "finish")
     variation_declared = any(
         any(key in mapping for key in variation_keys) for mapping in mappings
     )
-    returned_variations = _identity_values(
-        mappings,
-        variation_keys,
-    )
+    returned_variations = {
+        normalized
+        for mapping in mappings
+        if (value := _string_from(mapping, variation_keys)) is not None
+        if (normalized := _normalize_variation(value))
+    }
     if not variation_declared:
         return False
     if expected_variation and returned_variations != {expected_variation}:
@@ -927,18 +960,16 @@ def _card_detail_candidate_matches(
     """Match every official structured identity field before following href."""
     if _normalize(_string_from(candidate, _NAME_KEYS)) != _normalize(card.card_name):
         return False
-    returned_sets = {
-        _normalize(value)
-        for value in (
-            _string_from(candidate, ("setName", "set_name")),
-            _string_from(candidate, ("setCode", "set_code")),
-        )
-        if value
-    }
-    expected_sets = {
-        _normalize(value) for value in (card.set_name, card.set_code) if value.strip()
-    }
-    if not returned_sets or not expected_sets or returned_sets.isdisjoint(expected_sets):
+    returned_set_name = _normalize_set_identity(
+        _string_from(candidate, ("setName", "set_name"))
+    )
+    returned_set_code = _normalize(_string_from(candidate, ("setCode", "set_code")))
+    expected_set_name = _normalize_set_identity(card.set_name)
+    expected_set_code = _normalize(card.set_code)
+    if not (
+        (returned_set_name and expected_set_name and returned_set_name == expected_set_name)
+        or (returned_set_code and expected_set_code and returned_set_code == expected_set_code)
+    ):
         return False
     returned_number = _normalize(
         _string_from(candidate, ("cardNumber", "collector_number", "number"))
@@ -951,10 +982,10 @@ def _card_detail_candidate_matches(
     language_aliases = {_normalize(card.language), _normalize(_language_tag(card.language))} - {""}
     if not returned_language or returned_language not in language_aliases:
         return False
-    expected_variation = _normalize(
+    expected_variation = _normalize_variation(
         str((card.metadata or {}).get("variation") or (card.metadata or {}).get("variant") or "")
     )
-    returned_variation = _normalize(
+    returned_variation = _normalize_variation(
         _string_from(candidate, ("variation", "variant", "printing", "finish"))
     )
     if returned_variation != expected_variation:

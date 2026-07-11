@@ -24,6 +24,14 @@ from renaiss_bot.services.pack_rules import (
 
 logger = logging.getLogger(__name__)
 
+_RENAISS_VARIATION_BY_GAME_GRADE = {
+    "RR": "Double Rare",
+    "AR": "Illustration Rare",
+    "SR": "Ultra Rare",
+    "SAR": "Special Art Rare",
+    "UR": "Hyper Rare",
+}
+
 _PRICE_KEYS = (
     "psa10_market_usd",
     "psa10_usd",
@@ -85,12 +93,57 @@ def _card_name(row: Mapping[str, Any]) -> str:
     return str(meta.get("en_name") or row.get("species_name") or row.get("card_name") or "Unknown Card")
 
 
+def _canonical_collector_number(set_code: str, collector_number: str) -> str:
+    """Convert provider ids such as ``sv7-160`` to Renaiss item_no ``160``."""
+    code = set_code.strip()
+    number = collector_number.strip()
+    prefix = f"{code}-"
+    if code and number.casefold().startswith(prefix.casefold()):
+        suffix = number[len(prefix) :].strip()
+        if suffix:
+            return suffix
+    return number
+
+
+def _market_identity_metadata(
+    metadata: Mapping[str, Any],
+    *,
+    category: str,
+    game_grade: str,
+    original_collector_number: str,
+    canonical_collector_number: str,
+) -> dict[str, Any]:
+    """Separate the in-game rarity from the official Renaiss market identity."""
+    enriched = dict(metadata)
+    if original_collector_number != canonical_collector_number:
+        enriched.setdefault("source_collector_number", original_collector_number)
+    if category == "pokemon_tcg":
+        if not str(enriched.get("variation") or enriched.get("variant") or "").strip():
+            variation = _RENAISS_VARIATION_BY_GAME_GRADE.get(game_grade)
+            if variation:
+                enriched["variation"] = variation
+        if not str(enriched.get("market_grade") or "").strip():
+            enriched["market_grade"] = (
+                os.getenv("RENAISS_API_DEFAULT_MARKET_GRADE", "PSA 10 Gem Mint").strip()
+                or "PSA 10 Gem Mint"
+            )
+    return enriched
+
+
 def _row_to_card(row: Mapping[str, Any], *, category: str = "pokemon_tcg") -> CardIdentity:
     meta = _metadata(row.get("metadata"))
     card_name = _card_name(row)
     grade = normalize_grade(str(row.get("grade") or meta.get("grade") or "R"))
     set_code = str(row.get("series_code") or meta.get("set_id") or meta.get("series") or "")
-    collector_number = _number_from_metadata(meta, str(row.get("illustration_id") or ""))
+    source_collector_number = _number_from_metadata(meta, str(row.get("illustration_id") or ""))
+    collector_number = _canonical_collector_number(set_code, source_collector_number)
+    meta = _market_identity_metadata(
+        meta,
+        category=category,
+        game_grade=grade,
+        original_collector_number=source_collector_number,
+        canonical_collector_number=collector_number,
+    )
     image_url = row.get("image_url") or meta.get("display_image_url") or meta.get("pokard_image_url")
     return CardIdentity(
         category=category,
@@ -181,17 +234,31 @@ def sample_cards(category: str) -> list[CardIdentity]:
 
 def catalog_row_to_card(row: Mapping[str, Any]) -> CardIdentity:
     meta = _metadata(row.get("metadata"))
+    category = str(row.get("category") or "other_renaiss_cards")
+    grade = normalize_grade(str(row.get("grade") or meta.get("grade") or "R"))
+    set_code = str(row.get("set_code") or meta.get("set_code") or "")
+    source_collector_number = str(
+        row.get("collector_number") or meta.get("collector_number") or ""
+    )
+    collector_number = _canonical_collector_number(set_code, source_collector_number)
+    meta = _market_identity_metadata(
+        meta,
+        category=category,
+        game_grade=grade,
+        original_collector_number=source_collector_number,
+        canonical_collector_number=collector_number,
+    )
     price = _float_or_none(row.get("market_price_usd")) or _extract_price_usd(meta)
     return CardIdentity(
-        category=str(row.get("category") or "other_renaiss_cards"),
+        category=category,
         local_card_id=str(row.get("local_card_id") or ""),
         card_name=str(row.get("card_name") or "Unknown Card"),
-        set_code=str(row.get("set_code") or meta.get("set_code") or ""),
+        set_code=set_code,
         set_name=str(row.get("set_name") or meta.get("set_name") or ""),
-        collector_number=str(row.get("collector_number") or meta.get("collector_number") or ""),
+        collector_number=collector_number,
         language=str(row.get("language") or meta.get("language") or "Japanese"),
         rarity=str(row.get("rarity") or meta.get("rarity") or row.get("grade") or "R"),
-        grade=normalize_grade(str(row.get("grade") or meta.get("grade") or "R")),
+        grade=grade,
         image_url=str(row.get("image_url") or meta.get("image_url") or "") or None,
         already_owned=bool(row.get("already_owned")),
         market_price_usd=price,

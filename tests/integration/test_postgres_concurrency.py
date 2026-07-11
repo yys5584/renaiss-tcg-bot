@@ -18,6 +18,10 @@ from renaiss_bot.database.event_queries import (
     release_spawn_dispatch,
     reserve_spawn_dispatch,
 )
+from renaiss_bot.database.catalog_queries import (
+    acquire_catalog_refresh_lease,
+    finish_catalog_refresh_lease,
+)
 from renaiss_bot.database.instance_queries import (
     acquire_instance_lock,
     instance_lock_owner_backend_pid,
@@ -862,6 +866,24 @@ async def test_global_refresh_lease_fences_owner_and_enforces_cooldown(postgres_
         cadence_seconds=300,
         status="completed",
     )
+
+
+async def test_catalog_refresh_lease_allows_only_one_instance(postgres_pool):
+    owners = [f"catalog-refresh-{index}" for index in range(6)]
+    acquired = await asyncio.gather(
+        *(acquire_catalog_refresh_lease(owner=owner, lease_seconds=300) for owner in owners)
+    )
+
+    assert sum(acquired) == 1
+    winner = owners[acquired.index(True)]
+    loser = next(owner for owner in owners if owner != winner)
+    assert not await finish_catalog_refresh_lease(owner=loser, status="wrong_owner")
+    assert await finish_catalog_refresh_lease(
+        owner=winner,
+        status="completed",
+        retry_after_seconds=300,
+    )
+    assert not await acquire_catalog_refresh_lease(owner="too-early", lease_seconds=300)
 
 
 async def test_result_bell_outbox_cross_chat_claims_are_idempotent(postgres_pool):
