@@ -1754,3 +1754,96 @@ async def get_collection_detail(user_id: int | None, *, limit: int = 5) -> dict 
     except Exception as exc:
         logger.debug("Renaiss collection detail skipped: %s", exc)
         return None
+
+
+async def get_catch_ranking(*, period: str, limit: int = 10) -> dict:
+    """KST-boundary catch_won aggregates for the group ranking announcements.
+
+    ``period`` is ``"day"`` (since KST midnight) or ``"week"`` (since KST
+    Monday).  Counts public catch wins only — never asset totals — so the
+    announcement stays aligned with the leaderboard philosophy.
+    """
+    if period not in {"day", "week"}:
+        raise ValueError("period must be 'day' or 'week'")
+    limit = max(1, min(20, int(limit)))
+    pool = await get_db()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            WITH wins AS (
+                SELECT user_id, metadata, created_at
+                FROM renaiss_events
+                WHERE event_name = 'catch_won'
+                  AND user_id IS NOT NULL
+                  AND created_at >= (
+                      date_trunc($1, now() AT TIME ZONE 'Asia/Seoul')
+                      AT TIME ZONE 'Asia/Seoul'
+                  )
+            ), per_user AS (
+                SELECT
+                    user_id,
+                    COUNT(*)::int AS catches,
+                    MAX(COALESCE((metadata->>'fmv_usd')::numeric, 0))::numeric AS best_fmv
+                FROM wins
+                GROUP BY user_id
+            )
+            SELECT
+                p.user_id,
+                p.catches,
+                p.best_fmv,
+                (
+                    SELECT w.metadata->>'winner_name'
+                    FROM wins w
+                    WHERE w.user_id = p.user_id
+                    ORDER BY w.created_at DESC
+                    LIMIT 1
+                ) AS winner_name,
+                DENSE_RANK() OVER (ORDER BY p.catches DESC)::int AS rank
+            FROM per_user p
+            ORDER BY rank ASC, p.user_id ASC
+            LIMIT $2
+            """,
+            period,
+            limit,
+        )
+        best = await conn.fetchrow(
+            """
+            SELECT
+                metadata->>'card_name' AS card_name,
+                metadata->>'winner_name' AS winner_name,
+                COALESCE((metadata->>'fmv_usd')::numeric, 0)::numeric AS fmv_usd
+            FROM renaiss_events
+            WHERE event_name = 'catch_won'
+              AND user_id IS NOT NULL
+              AND created_at >= (
+                  date_trunc($1, now() AT TIME ZONE 'Asia/Seoul')
+                  AT TIME ZONE 'Asia/Seoul'
+              )
+            ORDER BY COALESCE((metadata->>'fmv_usd')::numeric, 0) DESC, created_at ASC
+            LIMIT 1
+            """,
+            period,
+        )
+    ranking_rows = [
+        {
+            "rank": int(row["rank"] or 0),
+            "user_id": int(row["user_id"]),
+            "winner_name": str(row["winner_name"] or "Collector"),
+            "catches": int(row["catches"] or 0),
+            "best_fmv": float(row["best_fmv"] or 0),
+        }
+        for row in rows
+    ]
+    best_catch = None
+    if best is not None and float(best["fmv_usd"] or 0) > 0:
+        best_catch = {
+            "card_name": str(best["card_name"] or "-"),
+            "winner_name": str(best["winner_name"] or "Collector"),
+            "fmv_usd": float(best["fmv_usd"] or 0),
+        }
+    return {
+        "period": period,
+        "rows": ranking_rows,
+        "best_catch": best_catch,
+        "total_catches": sum(row["catches"] for row in ranking_rows),
+    }

@@ -16,6 +16,7 @@ from telegram.error import BadRequest, Forbidden, NetworkError, RetryAfter, Time
 from telegram.ext import Application, ContextTypes
 
 from renaiss_bot.database.event_queries import list_unfinished_spawns, log_event
+from renaiss_bot.database.queries import get_catch_ranking
 from renaiss_bot.database.catalog_queries import (
     acquire_catalog_refresh_lease,
     finish_catalog_refresh_lease,
@@ -68,6 +69,8 @@ CATALOG_REFRESH_TIMES_KST = (
     time(hour=3, minute=0, tzinfo=KST),
     time(hour=15, minute=0, tzinfo=KST),
 )
+RANKING_ANNOUNCE_TIME_KST = time(hour=22, minute=0, tzinfo=KST)
+_RANK_MEDALS = ("🥇", "🥈", "🥉")
 
 
 def _catalog_refresh_limit() -> int:
@@ -739,6 +742,98 @@ async def recover_unfinished_spawns(application: Application, *, page_size: int 
     return recovered
 
 
+def ranking_announce_enabled() -> bool:
+    return os.getenv("RENAISS_RANKING_ANNOUNCE_ENABLED", "1").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+    }
+
+
+def build_ranking_message(ranking: dict, *, title: str, footer: str | None = None) -> str:
+    lines = [f"📊 <b>{escape(title)}</b>"]
+    for row in ranking.get("rows", [])[:5]:
+        rank = int(row.get("rank") or 0)
+        marker = _RANK_MEDALS[rank - 1] if 1 <= rank <= 3 else f" {rank}."
+        name = escape(str(row.get("winner_name") or "Collector"))
+        catches = int(row.get("catches") or 0)
+        plural = "es" if catches != 1 else ""
+        lines.append(f"{marker} <b>{name}</b> — {catches} catch{plural}")
+    best = ranking.get("best_catch")
+    if best:
+        lines.append(
+            f"🎣 Top catch: <b>{escape(str(best.get('card_name') or '-'))}</b>"
+            f" · ${float(best.get('fmv_usd') or 0):,.0f}"
+            f" · {escape(str(best.get('winner_name') or 'Collector'))}"
+        )
+    if footer:
+        lines.append(f"<i>{escape(footer)}</i>")
+    return "\n".join(lines)
+
+
+async def announce_daily_ranking_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """22:00 KST — post today's catch ranking; Sundays add the weekly final."""
+    if not ranking_announce_enabled():
+        return
+    chat_id = official_chat_id()
+    if chat_id is None:
+        logger.info("Ranking announce skipped: official chat is not configured.")
+        return
+    now_kst = datetime.now(KST)
+    today = now_kst.date().isoformat()
+
+    try:
+        daily = await get_catch_ranking(period="day", limit=5)
+    except Exception as exc:
+        logger.warning("Daily ranking query failed: %s", exc)
+        return
+    if daily["rows"]:
+        claimed = await log_event(
+            "daily_rank_posted",
+            event_key=f"daily-rank:{chat_id}:{today}",
+            chat_id=chat_id,
+            metadata={"rows": len(daily["rows"]), "total": daily["total_catches"]},
+        )
+        if claimed:
+            await context.bot.send_message(
+                chat_id,
+                build_ranking_message(
+                    daily,
+                    title=f"Daily Catch Ranking · {now_kst.strftime('%b %d')} (KST)",
+                    footer="Posted every night at 22:00 KST.",
+                ),
+                parse_mode="HTML",
+            )
+    else:
+        logger.info("Daily ranking skipped: no catches today.")
+
+    if now_kst.weekday() == 6:  # Sunday — weekly final before the Monday reset
+        try:
+            weekly = await get_catch_ranking(period="week", limit=10)
+        except Exception as exc:
+            logger.warning("Weekly ranking query failed: %s", exc)
+            return
+        if not weekly["rows"]:
+            return
+        week_key = now_kst.strftime("%G-W%V")
+        claimed = await log_event(
+            "weekly_rank_posted",
+            event_key=f"weekly-rank:{chat_id}:{week_key}",
+            chat_id=chat_id,
+            metadata={"rows": len(weekly["rows"]), "total": weekly["total_catches"]},
+        )
+        if claimed:
+            await context.bot.send_message(
+                chat_id,
+                build_ranking_message(
+                    weekly,
+                    title=f"Weekly Final · {week_key}",
+                    footer="Weekly board restarts Monday 00:00 KST. Congrats, collectors!",
+                ),
+                parse_mode="HTML",
+            )
+
+
 def register_jobs(application: Application) -> None:
     job_queue = application.job_queue
     if job_queue is None:
@@ -762,6 +857,14 @@ def register_jobs(application: Application) -> None:
             job_kwargs={"misfire_grace_time": None},
         )
     logger.info("Catalog DB cache refresh scheduled at 03:00 and 15:00 KST.")
+
+    job_queue.run_daily(
+        announce_daily_ranking_job,
+        time=RANKING_ANNOUNCE_TIME_KST,
+        name="renaiss_daily_ranking_announce",
+        job_kwargs={"misfire_grace_time": None},
+    )
+    logger.info("Daily catch ranking announce scheduled at 22:00 KST (weekly final on Sundays).")
 
     # Admission can close instantly, but existing T+24 picks and outbox rows are
     # obligations. Drain workers therefore run whenever the DB-backed bot runs.
