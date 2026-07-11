@@ -13,9 +13,13 @@ WIDTH = 1080
 HEIGHT = 1350
 TEMPLATE_VERSION = "slab-land-v1"
 _LOGO_PNG_PATH = Path(__file__).resolve().parents[1] / "assets" / "renaiss_logo.png"
+_FONTS_DIR = Path(__file__).resolve().parents[1] / "assets" / "fonts"
 
 
 def _font_candidates(*, mono: bool, bold: bool) -> list[str]:
+    # Bundled fonts come first so local previews and the Ubuntu host render
+    # pixel-identically; system fonts only cover a missing bundle.
+    bundled = _FONTS_DIR / ("DejaVuSansMono-Bold.ttf" if mono else "DejaVuSans-Bold.ttf")
     windows = Path("C:/Windows/Fonts")
     if mono:
         names = ["consolab.ttf", "consola.ttf"]
@@ -23,7 +27,7 @@ def _font_candidates(*, mono: bool, bold: bool) -> list[str]:
         names = ["arialbd.ttf", "segoeuib.ttf"]
     else:
         names = ["arial.ttf", "segoeui.ttf"]
-    return [str(windows / name) for name in names] + [
+    return [str(bundled)] + [str(windows / name) for name in names] + [
         "DejaVuSansMono-Bold.ttf" if mono else "DejaVuSans-Bold.ttf",
         "DejaVuSans.ttf",
     ]
