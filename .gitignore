@@ -13,3 +13,4 @@ venv/
 .DS_Store
 *.png
 !renaiss_bot/assets/**
+.claude/settings.local.json
