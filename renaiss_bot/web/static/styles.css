@@ -350,18 +350,28 @@ select { max-width: 150px; padding: 0 28px 0 10px; }
 .login-notes strong { font-size: 12px; }
 .login-notes span { margin-top: 3px; color: var(--muted); font-size: 11px; line-height: 1.5; }
 
-.page-section { min-height: 520px; }
+.page-section { min-height: 0; }
 .page-title { margin: 2px 0 16px; }
 .page-title h1 { font-size: 1.9rem; }
 .page-title p:not(.eyebrow) { max-width: 620px; margin: 5px 0 0; color: var(--muted); font-size: 13px; font-weight: 700; }
 .leaderboard { border-top: 1px solid var(--line); }
-.leader-row { min-height: 68px; display: grid; grid-template-columns: 56px 1fr minmax(150px, 220px); align-items: center; gap: 12px; border-bottom: 1px solid var(--line); }
+.leader-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px 12px 10px 8px; border-bottom: 1px solid var(--line); }
 .leader-row.is-me { background: #f2f4ff; }
-.leader-rank { padding-left: 12px; color: var(--brand); font-size: 18px; }
-.leader-name strong, .leader-name span, .leader-wins strong, .leader-wins span { display: block; }
-.leader-name span, .leader-wins span { color: var(--muted); font-size: 11px; }
-.leader-wins { padding-right: 12px; text-align: right; }
-.leader-wins strong { font-size: 20px; }
+.leader-rank { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 10px; background: var(--soft); color: var(--text); font-size: 15px; font-weight: 900; }
+.leader-row.tier-gold .leader-rank { background: #f6b73c; color: #fff; }
+.leader-row.tier-silver .leader-rank { background: #aeb8c6; color: #fff; }
+.leader-row.tier-bronze .leader-rank { background: #d29b6e; color: #fff; }
+.leader-name { min-width: 0; }
+.leader-name strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.leader-bar { display: block; margin-top: 6px; height: 6px; border-radius: 999px; background: var(--soft); overflow: hidden; }
+.leader-bar i { display: block; height: 100%; border-radius: 999px; background: var(--brand); }
+.leader-row.tier-gold .leader-bar i { background: #f6b73c; }
+.leader-row.tier-silver .leader-bar i { background: #aeb8c6; }
+.leader-row.tier-bronze .leader-bar i { background: #d29b6e; }
+.leader-wins { text-align: right; }
+.leader-wins strong, .leader-wins span { display: block; }
+.leader-wins strong { font-size: 18px; }
+.leader-wins span { color: var(--muted); font-size: 10px; }
 .fine-print { color: var(--muted); font-size: 11px; }
 
 .command-list { border-top: 1px solid var(--line); }
@@ -435,8 +445,9 @@ footer p { margin: 0; }
   .login-card { padding: 24px 16px; }
   .login-card h1 { font-size: 1.55rem; }
   .login-notes { grid-template-columns: 1fr; }
-  .leader-row { grid-template-columns: 40px 1fr; gap: 8px; padding: 9px 0; }
-  .leader-wins { grid-column: 2; padding-right: 6px; text-align: left; }
+  .leader-row { grid-template-columns: 36px minmax(0, 1fr) auto; gap: 8px; padding: 8px 6px; }
+  .leader-rank { width: 28px; height: 28px; font-size: 13px; }
+  .leader-wins strong { font-size: 16px; }
   .command { grid-template-columns: 78px 1fr 36px; gap: 8px; }
   .command code { font-size: 14px; }
   footer { width: calc(100% - 24px); }

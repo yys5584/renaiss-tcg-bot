@@ -4,8 +4,7 @@
   var API = "/renaiss/api";
   var messages = {
     ko: {
-      skip: "본문으로 건너뛰기", tgpokeHome: "TGPoke 홈", tgpokeNavigation: "TGPoke 주요 메뉴",
-      navHome: "홈", navMyCards: "내 카드", navDex: "도감", navAttendance: "출석", navTiers: "티어표",
+      skip: "본문으로 건너뛰기", renaissHome: "Renaiss 도감 홈",
       languageSelection: "언어 선택", openMenu: "메뉴 열기", closeMenu: "메뉴 닫기", renaissNavigation: "Renaiss 메뉴",
       telegramLogin: "로그인", logout: "로그아웃", loginUnavailable: "로그인 준비 중", openGroup: "봇 시작", openGameRoom: "Telegram 게임방",
       renaissDex: "도감", renaissMyCards: "내 카드", leaderboardTitle: "리더보드", guideTitle: "가이드",
@@ -44,8 +43,7 @@
       luckyCatches: "공개 포획 당첨", you: "나"
     },
     en: {
-      skip: "Skip to content", tgpokeHome: "TGPoke home", tgpokeNavigation: "TGPoke navigation",
-      navHome: "Home", navMyCards: "My cards", navDex: "Collection", navAttendance: "Attendance", navTiers: "Tiers",
+      skip: "Skip to content", renaissHome: "Renaiss collection home",
       languageSelection: "Language selection", openMenu: "Open menu", closeMenu: "Close menu", renaissNavigation: "Renaiss navigation",
       telegramLogin: "Sign in", logout: "Sign out", loginUnavailable: "Login setup pending", openGroup: "Start bot", openGameRoom: "Telegram game room",
       renaissDex: "Collection", renaissMyCards: "My cards", leaderboardTitle: "Leaderboard", guideTitle: "Guide",
@@ -397,11 +395,13 @@
     }
   }
 
-  function leaderMarkup(row) {
-    return '<article class="leader-row' + (row.is_me ? " is-me" : "") + '"><strong class="leader-rank">' + number(row.rank) +
-      '</strong><div class="leader-name"><strong>' + escapeHTML(row.display_name) + (row.is_me ? " · " + escapeHTML(t("you")) : "") +
-      '</strong><span>KST · weekly reset</span></div><div class="leader-wins"><strong>' + number(row.lucky_catches) +
-      '</strong><span>' + escapeHTML(t("luckyCatches")) + "</span></div></article>";
+  function leaderMarkup(row, maxWins) {
+    var tier = row.rank === 1 ? " tier-gold" : row.rank === 2 ? " tier-silver" : row.rank === 3 ? " tier-bronze" : "";
+    var percent = maxWins > 0 ? Math.max(6, Math.round((row.lucky_catches / maxWins) * 100)) : 0;
+    return '<article class="leader-row' + tier + (row.is_me ? " is-me" : "") + '"><span class="leader-rank">' + number(row.rank) +
+      '</span><div class="leader-name"><strong>' + escapeHTML(row.display_name) + (row.is_me ? " · " + escapeHTML(t("you")) : "") +
+      '</strong><span class="leader-bar" aria-hidden="true"><i data-percent="' + percent + '"></i></span></div>' +
+      '<div class="leader-wins"><strong>' + number(row.lucky_catches) + '</strong><span>' + escapeHTML(t("luckyCatches")) + "</span></div></article>";
   }
 
   async function loadLeaderboard(force) {
@@ -412,7 +412,14 @@
       var response = await fetch(API + "/leaderboard?limit=20", { credentials: "same-origin", cache: "no-store" });
       var data = await response.json();
       if (!response.ok || !data.ok) throw new Error("leaderboard unavailable");
-      list.innerHTML = data.rows && data.rows.length ? data.rows.map(leaderMarkup).join("") : '<p class="state-message">' + escapeHTML(t("noLeaders")) + "</p>";
+      var rows = data.rows || [];
+      var maxWins = rows.reduce(function (top, row) { return Math.max(top, Number(row.lucky_catches) || 0); }, 0);
+      list.innerHTML = rows.length
+        ? rows.map(function (row) { return leaderMarkup(row, maxWins); }).join("")
+        : '<p class="state-message">' + escapeHTML(t("noLeaders")) + "</p>";
+      list.querySelectorAll(".leader-bar i").forEach(function (bar) {
+        bar.style.width = Math.min(100, Math.max(0, Number(bar.dataset.percent) || 0)) + "%";
+      });
       state.leaderboardLoaded = true;
     } catch (error) {
       list.innerHTML = '<p class="state-message">' + escapeHTML(t("loadFailed")) + "</p>";

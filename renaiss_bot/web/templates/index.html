@@ -6,15 +6,15 @@
   <meta name="theme-color" content="#f6f7fb">
   <meta name="description" content="TGPoke에서 만나는 Renaiss 콜라보 카드 도감과 Telegram 로그인.">
   <title>Renaiss 카드 도감 | TGPoke</title>
-  <link rel="stylesheet" href="/renaiss/static/styles.css?v=20260711-10">
-  <script defer src="/renaiss/static/app.js?v=20260711-7"></script>
+  <link rel="stylesheet" href="/renaiss/static/styles.css?v=20260711-11">
+  <script defer src="/renaiss/static/app.js?v=20260711-8"></script>
 </head>
 <body>
   <a class="skip-link" href="#content" data-i18n="skip">본문으로 건너뛰기</a>
 
   <header class="topbar" id="navbar">
     <div class="nav-inner">
-      <a class="brand" href="/" aria-label="TGPoke 홈" data-i18n-aria="tgpokeHome">
+      <a class="brand" href="/renaiss" aria-label="Renaiss 도감 홈" data-i18n-aria="renaissHome">
         <svg class="brand-mark" viewBox="0 0 100 100" aria-hidden="true">
           <circle cx="50" cy="50" r="48" fill="#fff" stroke="#333" stroke-width="5"></circle>
           <path d="M2 50h96" stroke="#333" stroke-width="5"></path>
@@ -25,13 +25,11 @@
         TG<strong>Poke</strong><span class="collab-badge">Renaiss</span>
       </a>
 
-      <nav class="nav-links" aria-label="TGPoke 주요 메뉴" data-i18n-aria="tgpokeNavigation">
-        <a href="/" data-i18n="navHome">홈</a>
-        <a href="/mypokemon" data-i18n="navMyCards">내 카드</a>
-        <a href="/pokedex" data-i18n="navDex">도감</a>
-        <a href="/attendance" data-i18n="navAttendance">출석</a>
-        <a href="/tierlist" data-i18n="navTiers">티어표</a>
-        <a class="active" href="/renaiss" aria-current="page">Renaiss</a>
+      <nav class="nav-links" aria-label="Renaiss 메뉴" data-i18n-aria="renaissNavigation">
+        <a data-route="pokedex" href="/renaiss/pokedex" data-i18n="renaissDex">도감</a>
+        <a data-route="mycards" href="/renaiss/mycards" data-i18n="renaissMyCards">내 카드</a>
+        <a data-route="leaderboard" href="/renaiss/leaderboard" data-i18n="leaderboardTitle">리더보드</a>
+        <a data-route="guide" href="/renaiss/guide" data-i18n="guideTitle">가이드</a>
       </nav>
 
       <div class="nav-actions">
@@ -47,12 +45,6 @@
   </header>
 
   <div class="mobile-menu" id="mobileMenu">
-    <p class="mobile-menu-label">TGPoke</p>
-    <a href="/" data-i18n="navHome">홈</a>
-    <a href="/mypokemon" data-i18n="navMyCards">내 카드</a>
-    <a href="/pokedex" data-i18n="navDex">도감</a>
-    <a href="/attendance" data-i18n="navAttendance">출석</a>
-    <a href="/tierlist" data-i18n="navTiers">티어표</a>
     <p class="mobile-menu-label">Renaiss</p>
     <a data-route="pokedex" href="/renaiss/pokedex" data-i18n="renaissDex">콜라보 도감</a>
     <a data-route="mycards" href="/renaiss/mycards" data-i18n="renaissMyCards">내 Renaiss 카드</a>
