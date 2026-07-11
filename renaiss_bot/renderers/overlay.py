@@ -294,10 +294,10 @@ def _style_vars(kind: str) -> dict[str, str]:
         },
         "cgc-pristine": {
             "outer": "#0B7F88",
-            "wrap": "#0B7F88",
-            "grade_bg": "#F8F5EA",
+            "wrap": "#D9B44A",
+            "grade_bg": "#FFF7E0",
             "grade_fg": "#0B7F88",
-            "price_bg": "#F8F5EA",
+            "price_bg": "#FFF7E0",
             "price_fg": "#11110E",
         },
         "cgc": {
