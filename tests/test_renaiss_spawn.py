@@ -1200,3 +1200,105 @@ async def test_restart_recovery_pages_until_exhausted(monkeypatch):
     assert recovered == 2
     assert [call.kwargs["after_id"] for call in listing.await_args_list] == [0, 201, 202]
     assert bot.edit_message_text.await_count == 2
+
+
+async def test_rebuild_active_spawn_restores_round_from_ledger(monkeypatch):
+    from renaiss_bot.handlers.spawn import rebuild_active_spawn
+
+    card = _card("resumed", 120.0)
+    monkeypatch.setattr(
+        "renaiss_bot.services.card_pool.load_catalog_card",
+        AsyncMock(return_value=card),
+    )
+    metadata = {
+        "local_card_id": "catalog:pokemon_tcg:renaiss-xyz",
+        "message_id": 77,
+        "band": "rare",
+        "market_usd": 120.0,
+        "price_options": [60.0, 120.0, 180.0, 240.0],
+        "correct_price_index": 1,
+        "guess_capable": True,
+        "prompt_is_photo": True,
+    }
+    active = await rebuild_active_spawn(
+        session_id="resume-token",
+        chat_id=-1001,
+        metadata=metadata,
+        catchers={7: "Alice", 8: "Bob"},
+        guesses={7: 1},
+    )
+    assert active is not None
+    assert active.token == "resume-token"
+    assert active.message_id == 77
+    assert active.catchers == {7: "Alice", 8: "Bob"}
+    assert active.guesses == {7: 1}
+    assert active.price_options == [60.0, 120.0, 180.0, 240.0]
+    assert active.correct_price_index == 1
+    assert active.spawn.band == "rare"
+    assert active.prompt_is_photo is True
+
+
+async def test_restart_recovery_resumes_open_round_instead_of_closing(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    from renaiss_bot import jobs as jobs_module
+
+    closes_at = (datetime.now(timezone.utc) + timedelta(seconds=25)).isoformat()
+    row = {
+        "posted_event_id": 900,
+        "session_id": "resume-token",
+        "chat_id": -1001,
+        "metadata": {
+            "local_card_id": "catalog:pokemon_tcg:renaiss-xyz",
+            "message_id": 88,
+            "closes_at": closes_at,
+            "price_options": [10.0, 20.0, 30.0, 40.0],
+            "correct_price_index": 2,
+            "band": "common",
+            "market_usd": 20.0,
+        },
+        "created_at": datetime.now(timezone.utc),
+        "award_user_id": None,
+        "award_metadata": None,
+    }
+    pages = [[row], []]
+
+    async def fake_list(**kwargs):
+        return pages.pop(0)
+
+    monkeypatch.setattr(jobs_module, "list_unfinished_spawns", fake_list)
+    monkeypatch.setattr(
+        jobs_module,
+        "list_spawn_round_entries",
+        AsyncMock(return_value={"catchers": {5: "Resumer"}, "guesses": {5: 2}}),
+    )
+    card = _card("resumed", 20.0)
+    monkeypatch.setattr(
+        "renaiss_bot.services.card_pool.load_catalog_card",
+        AsyncMock(return_value=card),
+    )
+    close_edit = AsyncMock()
+    monkeypatch.setattr(jobs_module, "_edit_recovered_prompt", close_edit)
+
+    scheduled = []
+
+    class FakeQueue:
+        def run_once(self, callback, when, **kwargs):
+            scheduled.append((callback, when, kwargs))
+
+    _active.clear()
+    application = SimpleNamespace(
+        bot=SimpleNamespace(),
+        job_queue=FakeQueue(),
+        bot_data={},
+    )
+    recovered = await jobs_module.recover_unfinished_spawns(application)
+
+    assert recovered == 1
+    assert -1001 in _active
+    resumed = _active[-1001]
+    assert resumed.catchers == {5: "Resumer"}
+    assert resumed.guesses == {5: 2}
+    close_edit.assert_not_awaited()  # 닫기 안내가 아니라 이어하기여야 한다
+    assert scheduled and 20 <= scheduled[0][1] <= 26  # 남은 시간으로 재예약
+    _active.clear()
+

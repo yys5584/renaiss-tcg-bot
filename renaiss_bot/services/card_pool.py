@@ -266,6 +266,30 @@ def catalog_row_to_card(row: Mapping[str, Any]) -> CardIdentity:
     )
 
 
+async def load_catalog_card(local_card_id: str) -> CardIdentity | None:
+    """재시작 복원용: 카탈로그 한 장을 id로 읽어 CardIdentity로 만든다."""
+    if not local_card_id or not os.getenv("DATABASE_URL"):
+        return None
+    try:
+        pool = await get_db()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT local_card_id, category, card_name, grade, set_code, set_name,
+                       collector_number, rarity, language, image_url,
+                       market_price_usd, metadata
+                FROM renaiss_catalog_cards
+                WHERE local_card_id = $1
+                """,
+                local_card_id,
+            )
+    except Exception:
+        return None
+    if row is None:
+        return None
+    return catalog_row_to_card(dict(row))
+
+
 async def _load_catalog_pool(user_id: int | None, category: str) -> tuple[list[CardIdentity], str] | None:
     if os.getenv("RENAISS_SKIP_DB", "").strip().lower() in {"1", "true", "yes"}:
         return None

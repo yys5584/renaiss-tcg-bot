@@ -244,22 +244,34 @@ async def _edit_prompt_message(
     reply_markup=None,
 ) -> None:
     """Edit the live prompt whether it was posted as a photo or as text."""
-    if active.prompt_is_photo:
-        await context.bot.edit_message_caption(
-            chat_id=active.chat_id,
-            message_id=active.message_id,
-            caption=text,
-            parse_mode="HTML",
-            reply_markup=reply_markup,
-        )
-    else:
-        await context.bot.edit_message_text(
-            chat_id=active.chat_id,
-            message_id=active.message_id,
-            text=text,
-            parse_mode="HTML",
-            reply_markup=reply_markup,
-        )
+    async def _edit(as_photo: bool) -> None:
+        if as_photo:
+            await context.bot.edit_message_caption(
+                chat_id=active.chat_id,
+                message_id=active.message_id,
+                caption=text,
+                parse_mode="HTML",
+                reply_markup=reply_markup,
+            )
+        else:
+            await context.bot.edit_message_text(
+                chat_id=active.chat_id,
+                message_id=active.message_id,
+                text=text,
+                parse_mode="HTML",
+                reply_markup=reply_markup,
+            )
+
+    try:
+        await _edit(active.prompt_is_photo)
+    except BadRequest as exc:
+        # 복원된 라운드는 프롬프트 유형 기록이 어긋날 수 있어 반대 모드로 재시도한다.
+        detail = str(exc).lower()
+        if "there is no text in the message" in detail or "message caption" in detail or "no caption" in detail:
+            active.prompt_is_photo = not active.prompt_is_photo
+            await _edit(active.prompt_is_photo)
+        else:
+            raise
 
 
 def _lock(chat_id: int) -> asyncio.Lock:
@@ -391,7 +403,57 @@ def _spawn_event_metadata(active: ActiveSpawn) -> dict:
         "closes_at": (
             datetime.now(timezone.utc) + timedelta(seconds=catch_window_seconds())
         ).isoformat(),
+        # 재시작 복원용: 라운드를 원장만으로 재구성할 수 있게 저장한다.
+        "band": active.spawn.band,
+        "market_usd": active.spawn.market_usd,
+        "price_options": active.price_options,
+        "correct_price_index": active.correct_price_index,
+        "prompt_is_photo": active.prompt_is_photo,
     }
+
+
+async def rebuild_active_spawn(
+    *,
+    session_id: str,
+    chat_id: int,
+    metadata: dict,
+    catchers: dict[int, str],
+    guesses: dict[int, int],
+) -> ActiveSpawn | None:
+    """재시작 후 원장 메타데이터로 진행 중이던 라운드를 복원한다."""
+    from renaiss_bot.services.card_pool import load_catalog_card
+
+    local_card_id = str(metadata.get("local_card_id") or "")
+    message_id = metadata.get("message_id")
+    if not local_card_id or not isinstance(message_id, int):
+        return None
+    card = await load_catalog_card(local_card_id)
+    if card is None:
+        return None
+    market_usd = metadata.get("market_usd")
+    try:
+        market_value = float(market_usd) if market_usd is not None else float(card.market_price_usd or 0)
+    except (TypeError, ValueError):
+        market_value = float(card.market_price_usd or 0)
+    band = str(metadata.get("band") or price_band(market_value))
+    options_raw = metadata.get("price_options")
+    price_options = [float(v) for v in options_raw] if isinstance(options_raw, list) else []
+    correct_index = metadata.get("correct_price_index")
+    active = ActiveSpawn(
+        chat_id=chat_id,
+        spawn=Spawn(card=card, band=band, market_usd=market_value),
+        started_at=monotonic(),
+        message_id=message_id,
+        catchers=dict(catchers),
+        price_options=price_options,
+        correct_price_index=correct_index if isinstance(correct_index, int) else None,
+        guesses={u: c for u, c in guesses.items() if isinstance(c, int)},
+        token=session_id,
+        guess_capable=bool(metadata.get("guess_capable")),
+        variant=metadata.get("variant"),
+        prompt_is_photo=bool(metadata.get("prompt_is_photo", True)),
+    )
+    return active
 
 
 async def spawn_tick(context: ContextTypes.DEFAULT_TYPE, *, burst: bool = False) -> None:
@@ -720,6 +782,7 @@ async def catch_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 "user_id": user_id,
                 "chat_id": chat_id,
                 "session_id": active.token,
+                "metadata": {"display_name": _display_name(update)},
             },
             {
                 "event_name": "first_c_entered",

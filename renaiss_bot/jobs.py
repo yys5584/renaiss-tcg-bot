@@ -17,6 +17,7 @@ from telegram.ext import Application, ContextTypes
 
 from renaiss_bot.database.event_queries import (
     get_runtime_setting,
+    list_spawn_round_entries,
     list_unfinished_spawns,
     log_event,
 )
@@ -737,6 +738,59 @@ async def recover_unfinished_spawns(application: Application, *, page_size: int 
                 else:
                     failures.append(str(session_id))
                 continue
+            # ── 이어하기: 원장으로 라운드를 복원해 남은 시간만큼 계속 진행한다.
+            resumed = False
+            try:
+                from renaiss_bot.handlers.spawn import (
+                    _active as live_rounds,
+                    _lock as round_lock,
+                    _resolve_job,
+                    rebuild_active_spawn,
+                )
+
+                entries = await list_spawn_round_entries(str(session_id))
+                rebuilt = await rebuild_active_spawn(
+                    session_id=str(session_id),
+                    chat_id=int(chat_id),
+                    metadata=metadata,
+                    catchers=entries["catchers"],
+                    guesses=entries["guesses"],
+                )
+                if rebuilt is not None:
+                    closes_raw = str(metadata.get("closes_at") or "")
+                    try:
+                        closes_at = datetime.fromisoformat(closes_raw.replace("Z", "+00:00"))
+                    except ValueError:
+                        closes_at = None
+                    remaining = 1.0
+                    if closes_at is not None:
+                        remaining = max(
+                            1.0,
+                            (closes_at - datetime.now(timezone.utc)).total_seconds(),
+                        )
+                    async with round_lock(int(chat_id)):
+                        if live_rounds.get(int(chat_id)) is None:
+                            live_rounds[int(chat_id)] = rebuilt
+                            resumed = True
+                    if resumed:
+                        application.job_queue.run_once(
+                            _resolve_job,
+                            when=remaining,
+                            data=int(chat_id),
+                            name=f"renaiss_spawn_resolve_{chat_id}_{message_id}",
+                            job_kwargs={"misfire_grace_time": None},
+                        )
+                        logger.info(
+                            "Spawn round resumed after restart session=%s remaining=%.0fs catchers=%s",
+                            session_id,
+                            remaining,
+                            len(entries["catchers"]),
+                        )
+                        recovered += 1
+                        continue
+            except Exception as exc:
+                logger.warning("Spawn round resume failed session=%s: %s", session_id, exc)
+
             prompt_closed = False
             try:
                 await _edit_recovered_prompt(

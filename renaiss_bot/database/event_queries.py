@@ -359,3 +359,40 @@ async def set_runtime_setting(key: str, value: dict) -> None:
             _json.dumps(value),
         )
 
+async def list_spawn_round_entries(session_id: str) -> dict:
+    """복원용: 한 라운드의 참가자와 잠긴 추측을 원장에서 재구성한다."""
+    pool = await get_db()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT event_name, user_id, metadata
+            FROM renaiss_events
+            WHERE session_id = $1
+              AND event_name IN ('catch_entered', 'price_guess_locked')
+            ORDER BY id
+            """,
+            session_id,
+        )
+    catchers: dict[int, str] = {}
+    guesses: dict[int, int] = {}
+    import json as _json
+
+    for row in rows:
+        metadata = row["metadata"]
+        if isinstance(metadata, str):
+            try:
+                metadata = _json.loads(metadata)
+            except ValueError:
+                metadata = {}
+        metadata = metadata if isinstance(metadata, dict) else {}
+        user_id = row["user_id"]
+        if user_id is None:
+            continue
+        if row["event_name"] == "catch_entered":
+            catchers[int(user_id)] = str(metadata.get("display_name") or "Collector")
+        else:
+            choice = metadata.get("choice_index")
+            if isinstance(choice, int):
+                guesses[int(user_id)] = choice
+    return {"catchers": catchers, "guesses": guesses}
+
