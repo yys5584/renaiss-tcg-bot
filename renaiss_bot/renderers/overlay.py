@@ -14,7 +14,12 @@ from html import escape
 from pathlib import Path
 from typing import Any
 
-from renaiss_bot.renderers.pillow_overlay import TEMPLATE_VERSION, render_fixed_overlay
+from renaiss_bot.renderers.pillow_overlay import (
+    TEMPLATE_VERSION,
+    TIER_COLORS,
+    render_fixed_overlay,
+    render_slab_landscape,
+)
 from renaiss_bot.renderers.playwright_render import render_html_to_png, resolve_image_to_data_uri
 from renaiss_bot.services.models import CardIdentity, RenaissPrice
 from renaiss_bot.services.market import market_card_eligible
@@ -264,6 +269,22 @@ def _grader_kind(card: CardIdentity, price: RenaissPrice) -> str:
     raw_rarity = str(card.rarity or "").strip().upper()
     grade = raw_rarity if raw_rarity in _TCG_GRADE_KIND else normalize_grade(card.grade)
     return _TCG_GRADE_KIND.get(grade, "tcg-common")
+
+
+def _tier_letter(card: CardIdentity) -> str:
+    """가격 기반 grade를 Renaiss 표기(TOP/S/A/B/C)로 정규화한다."""
+    from renaiss_bot.services.spawn import tier_short
+
+    return tier_short(card.grade) or "C"
+
+
+def _set_line(card: CardIdentity) -> str:
+    label = card.set_name or card.set_code or "Unknown set"
+    if len(label) > 20:
+        label = label[:19].rstrip() + "…"
+    number = f" #{card.collector_number}" if card.collector_number else ""
+    language = f" · {card.language}" if card.language else ""
+    return f"{label}{number}{language}"
 
 
 def _style_vars(kind: str) -> dict[str, str]:
@@ -597,14 +618,14 @@ async def _render_overlay_card(card: CardIdentity, price: RenaissPrice) -> bytes
 
     image_url = price.image_url or card.image_url
     inlined = await _cached_image_data_uri(image_url)
-    kind = _grader_kind(card, price)
     rendered = await asyncio.to_thread(
-        render_fixed_overlay,
+        render_slab_landscape,
         card_image=_data_uri_bytes(inlined),
-        kind=kind,
-        style=_style_vars(kind),
-        grade_text=_grade_text(card, price),
+        tier=_tier_letter(card),
+        name=card.card_name or "Unknown Card",
+        set_line=_set_line(card),
         price_text=_price_text(card, price),
+        headline="CARD REVEAL",
     )
     _remember(
         _FINAL_CACHE,
@@ -616,23 +637,37 @@ async def _render_overlay_card(card: CardIdentity, price: RenaissPrice) -> bytes
 
 
 def prompt_render_key(grade: str) -> str:
-    """Stable per-tier cache key for the blind spawn prompt image."""
-    kind = _TCG_GRADE_KIND.get(normalize_grade(grade), "tcg-common")
-    return f"spawn-prompt-v1:{kind}"
+    """Stable cache key: 티어에 매칭된 머신 + 배지 조합."""
+    from renaiss_bot.services.spawn import tier_machine, tier_short
+
+    tier = tier_short(grade) or "C"
+    return f"spawn-prompt-v3:{tier_machine(grade)}:{tier}"
 
 
 async def render_prompt_card(grade: str) -> bytes | None:
-    """Tier-styled blind prompt: the frame reveals rarity, never the card."""
-    kind = _TCG_GRADE_KIND.get(normalize_grade(grade), "tcg-common")
+    """블라인드 프롬프트: 결과 티어와 매칭된 Renaiss 가챠 머신 이미지."""
+    from renaiss_bot.renderers.pillow_overlay import render_machine_prompt
+    from renaiss_bot.services.spawn import tier_display, tier_machine, tier_short
 
-    def run() -> bytes:
-        return render_fixed_overlay(
+    tier = tier_short(grade) or "C"
+
+    def run() -> bytes | None:
+        rendered = render_machine_prompt(
+            machine=tier_machine(grade),
+            tier=tier,
+            tier_label=tier_display(grade) if tier == "TOP" else tier,
+        )
+        if rendered is not None:
+            return rendered
+        # 머신 자산이 없으면 기존 슬랩 블라인드로 폴백한다.
+        return render_slab_landscape(
             card_image=None,
-            kind=kind,
-            style=_style_vars(kind),
-            grade_text=normalize_grade(grade),
+            tier=tier,
+            name="??????",
+            set_line="Type c to catch",
             price_text="???",
-            placeholder_text="?",
+            headline="BLIND MARKET SPAWN",
+            label_name="???",
         )
 
     try:

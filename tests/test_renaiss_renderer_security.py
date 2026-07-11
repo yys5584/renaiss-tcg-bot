@@ -131,7 +131,8 @@ async def test_fixed_frame_places_the_card_without_starting_chromium(monkeypatch
     )
 
     with Image.open(BytesIO(result)) as rendered:
-        assert rendered.size == (1080, 1350)
-        red, green, blue = rendered.convert("RGB").getpixel((540, 771))
+        assert rendered.size == (1600, 900)  # landscape slab layout
+        # landscape layout: the card sits inside the slab on the left panel
+        red, green, blue = rendered.convert("RGB").getpixel((298, 467))
         assert red > 180 and green < 80 and blue < 80
     chromium.assert_not_awaited()

@@ -45,6 +45,35 @@ def _card_value(card: CardIdentity) -> float:
         return 0.0
 
 
+# Renaiss 가챠 표기(TOP / Tier S~C)와 머신 매핑. DB grade는 내부값으로 유지하고
+# 표시 계층에서만 변환해 검증 identity 바인딩을 건드리지 않는다.
+GRADE_TIER_SHORT = {
+    "UR": "TOP", "MUR": "TOP",
+    "SAR": "S",
+    "SR": "A", "AR": "A", "SP": "A",
+    "R": "B", "RR": "B",
+    "C": "C", "U": "C",
+}
+TIER_MACHINES = {"TOP": "eden", "S": "eden", "A": "renacrypt", "B": "omega", "C": "omega"}
+
+
+def tier_short(grade: str | None) -> str | None:
+    """Return TOP/S/A/B/C for known grades, or None for unknown legacy text."""
+    return GRADE_TIER_SHORT.get(str(grade or "").strip().upper())
+
+
+def tier_display(grade: str | None) -> str:
+    """Renaiss-style display label: TOP, Tier S..C; unknown grades pass through."""
+    short = tier_short(grade)
+    if short is None:
+        return str(grade or "-")
+    return "TOP" if short == "TOP" else f"Tier {short}"
+
+
+def tier_machine(grade: str | None) -> str:
+    return TIER_MACHINES.get(tier_short(grade) or "C", "omega")
+
+
 # 가격 기반 수집 등급. 스폰 밴드 기준선(rare=$100, grail=$500)과 정렬된다.
 GRADE_MIN_USD = (("UR", 500.0), ("SAR", 300.0), ("SR", 100.0), ("R", 30.0))
 

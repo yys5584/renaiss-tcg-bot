@@ -49,7 +49,7 @@ from renaiss_bot.services.media_cache import (
 from renaiss_bot.services.models import RenaissPrice
 from renaiss_bot.services.price_evidence import catalog_reference_price
 from renaiss_bot.services.quiz import build_price_options, format_distribution, format_price_option
-from renaiss_bot.services.spawn import Spawn, price_band, roll_spawn
+from renaiss_bot.services.spawn import Spawn, price_band, roll_spawn, tier_display
 from renaiss_bot.services.tracking import build_tracked_url
 
 logger = logging.getLogger(__name__)
@@ -339,7 +339,7 @@ def _spawn_text(active: ActiveSpawn) -> str:
         action += " Guess the price below."
     lines = [
         "🕵️ <b>BLIND MARKET SPAWN</b>",
-        f"<b>{escape(spawn.card.card_name)}</b> · {escape(spawn.card.grade or '-')}",
+        f"<b>{escape(spawn.card.card_name)}</b> · {escape(tier_display(spawn.card.grade))}",
         _identity_line(spawn),
         action,
         f"⏳ {remaining}s · 👥 {len(active.catchers)} · 🧠 {len(active.guesses)}",
@@ -877,7 +877,7 @@ async def _resolve(context: ContextTypes.DEFAULT_TYPE, active: ActiveSpawn) -> N
     caption = "\n".join(
         [
             _price_summary_line(spawn.card, price),
-            f"{band_emoji} <b>{escape(spawn.card.card_name)}</b> · {escape(spawn.card.grade or '-')}",
+            f"{band_emoji} <b>{escape(spawn.card.card_name)}</b> · {escape(tier_display(spawn.card.grade))}",
             _identity_line(spawn),
             winner_line,
             *_guess_distribution_lines(active),

@@ -11,7 +11,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 WIDTH = 1080
 HEIGHT = 1350
-TEMPLATE_VERSION = "pillow-v2"
+TEMPLATE_VERSION = "slab-land-v1"
 _LOGO_PNG_PATH = Path(__file__).resolve().parents[1] / "assets" / "renaiss_logo.png"
 
 
@@ -182,3 +182,194 @@ def render_fixed_overlay(
 def clear_frame_cache() -> None:
     _fixed_frame.cache_clear()
     _font.cache_clear()
+
+# ── Renaiss 실사 슬랩 기반 가로형(16:9) 렌더 ──────────────────────────────
+LANDSCAPE_WIDTH = 1600
+LANDSCAPE_HEIGHT = 900
+_SLAB_TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "assets" / "renaiss_slab_template.png"
+# 빈 슬랩 템플릿(1024x1024)의 픽셀 스캔 실측값
+_SLAB_SLOT = (338, 306, 686, 794)
+_SLAB_LABEL = (317, 122, 706, 233)
+TIER_COLORS = {
+    "TOP": "#C9A227",
+    "S": "#7C3AED",
+    "A": "#2563EB",
+    "B": "#059669",
+    "C": "#6B7280",
+}
+_MACHINE_DIR = Path(__file__).resolve().parents[1] / "assets"
+
+
+def tier_color(tier: str) -> str:
+    return TIER_COLORS.get((tier or "").strip().upper(), TIER_COLORS["C"])
+
+
+@lru_cache(maxsize=4)
+def _machine_art(machine: str) -> Image.Image | None:
+    try:
+        with Image.open(_MACHINE_DIR / f"renaiss_machine_{machine}.jpg") as source:
+            source.load()
+            return source.convert("RGB")
+    except OSError:
+        return None
+
+
+def render_machine_prompt(*, machine: str, tier: str, tier_label: str) -> bytes | None:
+    """블라인드 스폰: 티어에 매칭된 Renaiss 가챠 머신 + 티어 배지."""
+    art = _machine_art(machine)
+    if art is None:
+        return None
+    canvas = art.copy()
+    draw = ImageDraw.Draw(canvas)
+    color = tier_color(tier)
+    badge_font = _font(56)
+    bounds = draw.textbbox((0, 0), tier_label, font=badge_font)
+    pad_x, pad_y = 26, 14
+    width = bounds[2] - bounds[0] + pad_x * 2
+    height = bounds[3] - bounds[1] + pad_y * 2
+    x1, y0 = canvas.width - 28, 28
+    x0, y1 = x1 - width, y0 + height
+    draw.rounded_rectangle((x0, y0, x1, y1), radius=14, fill=color)
+    draw.text(((x0 + x1) // 2, (y0 + y1) // 2), tier_label, fill="#ffffff", font=badge_font, anchor="mm")
+    output = BytesIO()
+    canvas.save(output, format="PNG", compress_level=3)
+    return output.getvalue()
+
+
+@lru_cache(maxsize=1)
+def _slab_template() -> Image.Image | None:
+    try:
+        with Image.open(_SLAB_TEMPLATE_PATH) as source:
+            source.load()
+            return source.convert("RGB")
+    except OSError:
+        return None
+
+
+@lru_cache(maxsize=1)
+def _landscape_backdrop() -> Image.Image:
+    """어두운 비네트 배경. 블러가 비싸므로 한 번만 만든다."""
+    from PIL import ImageFilter
+
+    canvas = Image.new("RGB", (LANDSCAPE_WIDTH, LANDSCAPE_HEIGHT), (12, 12, 13))
+    veil = Image.new("L", (LANDSCAPE_WIDTH, LANDSCAPE_HEIGHT), 0)
+    ImageDraw.Draw(veil).ellipse(
+        (-300, -250, LANDSCAPE_WIDTH + 300, LANDSCAPE_HEIGHT + 250), fill=38
+    )
+    veil = veil.filter(ImageFilter.GaussianBlur(180))
+    return Image.composite(
+        Image.new("RGB", (LANDSCAPE_WIDTH, LANDSCAPE_HEIGHT), (26, 26, 28)), canvas, veil
+    )
+
+
+def render_slab_landscape(
+    *,
+    card_image: bytes | None,
+    tier: str,
+    name: str,
+    set_line: str,
+    price_text: str,
+    headline: str,
+    label_name: str | None = None,
+) -> bytes:
+    """Renaiss 슬랩을 왼쪽에, 큰 타이포를 오른쪽에 두는 16:9 합성."""
+    template = _slab_template()
+    if template is None:
+        # 템플릿 자산이 없으면 기존 고정 프레임 경로로 폴백한다.
+        style = {"grade_bg": "#efece4", "grade_fg": "#17150f", "price_bg": "#efece4",
+                 "price_fg": "#17150f", "outer": tier_color(tier), "wrap": "#efece4"}
+        return render_fixed_overlay(
+            card_image=card_image, kind="tcg-common", style=style,
+            grade_text=tier, price_text=price_text,
+            placeholder_text=None if card_image else "?",
+        )
+    color = tier_color(tier)
+    tier_label = (tier or "C").strip().upper()
+
+    slab = template.copy()
+    draw = ImageDraw.Draw(slab)
+    draw.rectangle(
+        (_SLAB_LABEL[0] + 1, _SLAB_LABEL[1] + 1, _SLAB_LABEL[2] - 1, _SLAB_LABEL[3] - 1),
+        outline=color,
+        width=6,
+    )
+    label_center_y = (_SLAB_LABEL[1] + _SLAB_LABEL[3]) // 2
+    draw.text(
+        (_SLAB_LABEL[0] + 26, label_center_y),
+        (label_name if label_name is not None else name)[:16],
+        fill=(15, 15, 15),
+        font=_font(42),
+        anchor="lm",
+    )
+    draw.text(
+        (_SLAB_LABEL[2] - 26, label_center_y),
+        tier_label,
+        fill=color,
+        font=_font(52),
+        anchor="rm",
+    )
+    card = _load_card_image(card_image)
+    if card is not None:
+        fitted = ImageOps.contain(
+            card,
+            (_SLAB_SLOT[2] - _SLAB_SLOT[0], _SLAB_SLOT[3] - _SLAB_SLOT[1]),
+            method=Image.Resampling.LANCZOS,
+        )
+        slab.paste(
+            fitted,
+            (
+                (_SLAB_SLOT[0] + _SLAB_SLOT[2]) // 2 - fitted.width // 2,
+                (_SLAB_SLOT[1] + _SLAB_SLOT[3]) // 2 - fitted.height // 2,
+            ),
+            fitted if fitted.mode == "RGBA" else None,
+        )
+    else:
+        draw.text(
+            ((_SLAB_SLOT[0] + _SLAB_SLOT[2]) // 2, (_SLAB_SLOT[1] + _SLAB_SLOT[3]) // 2 - 10),
+            "?",
+            fill=color,
+            font=_font(300),
+            anchor="mm",
+        )
+
+    canvas = _landscape_backdrop().copy()
+    draw = ImageDraw.Draw(canvas)
+    slab_fit = ImageOps.contain(
+        slab.crop((250, 60, 775, 1000)), (620, LANDSCAPE_HEIGHT - 80),
+        method=Image.Resampling.LANCZOS,
+    )
+    canvas.paste(slab_fit, (70, (LANDSCAPE_HEIGHT - slab_fit.height) // 2))
+
+    text_x = 760
+    draw.text((text_x, 190), headline[:26], fill=(150, 150, 155), font=_font(44))
+    draw.text((text_x, 258), name[:20], fill=(240, 240, 238), font=_font(96))
+    draw.text((text_x, 392), set_line[:42], fill=(150, 150, 155), font=_font(40, bold=False))
+
+    badge_font = _font(64)
+    bounds = draw.textbbox((0, 0), tier_label, font=badge_font)
+    badge_w = bounds[2] - bounds[0] + 68
+    badge = (text_x, 490, text_x + badge_w, 586)
+    draw.rounded_rectangle(badge, radius=16, fill=color)
+    draw.text(
+        ((badge[0] + badge[2]) // 2, (badge[1] + badge[3]) // 2),
+        tier_label, fill=(255, 255, 255), font=badge_font, anchor="mm",
+    )
+    price_font = _font(88 if len(price_text) <= 8 else 54)
+    draw.text(
+        (badge[2] + 40, (badge[1] + badge[3]) // 2),
+        price_text[:14], fill=(240, 240, 238), font=price_font, anchor="lm",
+    )
+
+    logo = _brand_logo()
+    if logo is not None:
+        fitted_logo = logo.resize((300, int(logo.height * 300 / logo.width)))
+        canvas.paste(
+            fitted_logo,
+            (LANDSCAPE_WIDTH - 300 - 70, LANDSCAPE_HEIGHT - fitted_logo.height - 56),
+            fitted_logo,
+        )
+
+    output = BytesIO()
+    canvas.save(output, format="PNG", compress_level=3)
+    return output.getvalue()
+
