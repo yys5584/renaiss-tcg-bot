@@ -10,6 +10,7 @@ from telegram.ext import ContextTypes
 from renaiss_bot.services.categories import list_categories
 from renaiss_bot.services.features import private_free_packs_enabled
 from renaiss_bot.services.market import daily_pick_enabled
+from renaiss_bot.services.emoji import icon
 from renaiss_bot.services.tracking import build_tracked_url
 
 
@@ -99,15 +100,15 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         else ""
     )
     text = (
-        "<b>Renaiss Collaboration Collector Game</b>\n"
+        f"{icon('crystal')} <b>Renaiss Collaboration Collector Game</b>\n"
         "------------\n"
         "Catch blind spawns together, guess the hidden price, and reveal the Renaiss reference. "
         "Your collection page is an optional extra.\n\n"
-        "<b>Core Loop</b>\n"
+        f"{icon('game')} <b>Core Loop</b>\n"
         "- Join blind group spawns with <code>c</code>\n"
         "- Guess the hidden Renaiss reference price\n"
         f"{market_line}\n"
-        "<b>Commands</b>\n"
+        f"{icon('pokedex')} <b>Commands</b>\n"
         "- c: enter the current blind group spawn\n"
         "- /mycards: view your Renaiss collection\n"
         f"{market_command}"
@@ -141,9 +142,9 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def cmd_sets(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    lines = ["<b>Supported Card Categories</b>", "------------"]
+    lines = [f"{icon('pokedex')} <b>Supported Card Categories</b>", "------------"]
     for category in list_categories():
-        state = "enabled" if category.enabled else "planned"
+        state = f"{icon('check')} enabled" if category.enabled else "planned"
         lines.append(f"- <b>{category.label}</b> <code>{category.key}</code>: {state}")
         lines.append(f"  {category.description}")
     if update.effective_message:

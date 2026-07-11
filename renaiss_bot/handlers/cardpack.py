@@ -126,7 +126,11 @@ def _format_money(value) -> str:
 
 def _grade_line(grades: list[dict]) -> str:
     counts = {str(row.get("grade") or "-"): int(row.get("count") or 0) for row in grades}
-    parts = [f"{grade} {counts[grade]}" for grade in _GRADE_ORDER if counts.get(grade)]
+    parts = [
+        f"{grade_bar(grade) or escape(grade)} {counts[grade]}"
+        for grade in _GRADE_ORDER
+        if counts.get(grade)
+    ]
     if not parts:
         parts = [
             f"{escape(str(row.get('grade') or '-'))} {int(row.get('count') or 0)}"
@@ -140,7 +144,10 @@ def _card_row(idx: int, row: dict) -> str:
     grade = escape(str(row.get("grade") or "-"))
     quantity = int(row.get("quantity") or 0)
     quantity_text = f" ×{quantity}" if quantity > 1 else ""
-    parts = [f"{idx}. <b>{name}</b>{quantity_text} · {grade}"]
+    grade_raw = str(row.get("grade") or "-")
+    bar = grade_bar(grade_raw)
+    grade_segment = f"{bar} {grade}" if bar else grade
+    parts = [f"{idx}. <b>{name}</b>{quantity_text} · {grade_segment}"]
     set_code = str(row.get("set_code") or "").strip()
     if set_code:
         parts.append(escape(set_code.upper()))
@@ -182,15 +189,15 @@ _DIVIDER = "━" * 18
 def _portfolio_text(stats: PortfolioStats) -> str:
     achievement_count = len(stats.unlocked_achievements)
     total_achievements = len(stats.achievements)
-    lines = [_DIVIDER, "🎴 <b>RENAISS COLLECTION</b>", _DIVIDER]
+    lines = [_DIVIDER, f"{icon('container')} <b>RENAISS COLLECTION</b>", _DIVIDER]
 
     value = _format_money(stats.total_value_usd)
     if value != "-":
-        lines.append(f"💰 <b>Value</b>   {value}")
+        lines.append(f"{icon('coin')} <b>Value</b>   {value}")
     else:
-        lines.append("💰 <b>Value</b>   <i>pending — prices verify twice a day</i>")
+        lines.append(f"{icon('coin')} <b>Value</b>   <i>pending — prices verify twice a day</i>")
     lines.append(
-        f"📚 <b>Cards</b>   {stats.total_cards} · {stats.unique_cards} unique"
+        f"{icon('pokedex')} <b>Cards</b>   {stats.total_cards} · {stats.unique_cards} unique"
         f" · {stats.sets} sets"
     )
     if stats.season_pool_total > 0:
@@ -200,31 +207,31 @@ def _portfolio_text(stats: PortfolioStats) -> str:
             bar_filled = max(1, bar_filled)
         bar = "▰" * bar_filled + "▱" * (10 - bar_filled)
         lines.append(
-            f"📈 <b>Pool</b>    {bar} {stats.owned_in_pool}/{stats.season_pool_total}"
+            f"{icon('footsteps')} <b>Pool</b>    {bar} {stats.owned_in_pool}/{stats.season_pool_total}"
             f" · {percent:.1f}%"
         )
     grade_line = _grade_line(stats.grade_counts)
     if grade_line != "-":
-        lines.append(f"🏅 <b>Grades</b>  {escape(grade_line)}")
+        lines.append(f"{icon('bookmark')} <b>Grades</b>  {grade_line}")
     if len(stats.category_counts) > 1:
-        lines.append(f"🗂 <b>Mix</b>     {_category_rows(stats.category_counts)}")
+        lines.append(f"{icon('stationery')} <b>Mix</b>     {_category_rows(stats.category_counts)}")
 
     lines.extend(
-        [_DIVIDER, f"🏆 <b>ACHIEVEMENTS</b> {achievement_count}/{total_achievements}"]
+        [_DIVIDER, f"{icon('champion')} <b>ACHIEVEMENTS</b> {achievement_count}/{total_achievements}"]
     )
     unlocked_titles = [escape(item.title) for item in stats.unlocked_achievements[:5]]
     if unlocked_titles:
-        lines.append("✅ " + " · ".join(unlocked_titles))
+        lines.append(icon('check') + " " + " · ".join(unlocked_titles))
     else:
         lines.append("None yet — join a group spawn with <code>c</code>.")
 
     top_rows = _top_card_rows(stats.top_cards)
     if top_rows:
-        lines.extend([_DIVIDER, "⭐ <b>TOP CARDS</b>", *top_rows])
+        lines.extend([_DIVIDER, f"{icon('favorite')} <b>TOP CARDS</b>", *top_rows])
 
     recent_rows = _recent_card_rows(stats.recent_cards)
     if recent_rows:
-        lines.extend([_DIVIDER, "🕘 <b>RECENT ADDS</b>", *recent_rows])
+        lines.extend([_DIVIDER, f"{icon('windy')} <b>RECENT ADDS</b>", *recent_rows])
 
     lines.extend(
         [

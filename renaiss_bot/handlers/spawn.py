@@ -351,7 +351,7 @@ def _spawn_text(active: ActiveSpawn) -> str:
     if active.price_options:
         action += " Guess the price below."
     lines = [
-        "🕵️ <b>BLIND MARKET SPAWN</b>",
+        f"{icon('crystal')} <b>BLIND MARKET SPAWN</b>",
         f"<b>{escape(spawn.card.card_name)}</b> · {_tier_badge(spawn.card.grade)}",
         _identity_line(spawn),
         action,
@@ -640,7 +640,7 @@ async def catch_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             if update.effective_message:
                 try:
                     receipt = await update.effective_message.reply_text(
-                        f"🎴 <b>{escape(_display_name(update))}</b> opened a pack! "
+                        f"{icon('container')} <b>{escape(_display_name(update))}</b> opened a pack! "
                         f"({entry_count} in)",
                         parse_mode="HTML",
                         disable_notification=True,
@@ -913,7 +913,7 @@ async def _resolve(context: ContextTypes.DEFAULT_TYPE, active: ActiveSpawn) -> N
     else:
         winner_line = "💨 Nobody caught it."
 
-    band_emoji = {"grail": "🔥", "rare": "💎"}.get(spawn.band, "✨")
+    band_emoji = {"grail": "🔥", "rare": icon("crystal")}.get(spawn.band, icon("skill"))
     caption = "\n".join(
         [
             _price_summary_line(spawn.card, price),
@@ -1051,7 +1051,7 @@ async def _clear_prompt(
         await _edit_prompt_message(
             context,
             active,
-            text=f"✅ <b>{escape(active.spawn.card.card_name)}</b> {outcome} — result posted below.",
+            text=f"{icon('check')} <b>{escape(active.spawn.card.card_name)}</b> {outcome} — result posted below.",
         )
     except Exception:
         pass

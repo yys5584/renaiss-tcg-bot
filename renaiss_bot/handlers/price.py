@@ -127,7 +127,8 @@ async def cmd_price(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             and explicit_freshness
             else "Candidate reference value"
         )
-        lines.append(f"{value_label}: <b>${price.fmv_usd:,.2f}</b>")
+        badge = icon("check") if value_label.startswith("Renaiss") else "🧪"
+        lines.append(f"{icon('coin')} {value_label}: <b>${price.fmv_usd:,.2f}</b> {badge}")
     if price.grade_label:
         lines.append(f"Grade: <b>{escape(price.grade_label)}</b>")
     if price.grading_company:

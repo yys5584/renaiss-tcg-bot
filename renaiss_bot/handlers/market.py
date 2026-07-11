@@ -17,6 +17,7 @@ from renaiss_bot.database.market_queries import (
     list_market_board,
     lock_daily_pick,
 )
+from renaiss_bot.services.emoji import icon
 from renaiss_bot.services.market import daily_pick_enabled, decision_window_open, today_kst
 from renaiss_bot.services.tracking import build_tracked_url
 
@@ -106,7 +107,7 @@ def _market_text(
     if not board:
         lines.append("No cards revealed this week yet. Join a blind spawn with <code>c</code>.")
     for item in board:
-        gate = "✅ pickable" if item.get("pick_eligible") else "🧪 watch only"
+        gate = f"{icon('check')} pickable" if item.get("pick_eligible") else "🧪 watch only"
         source = ""
         raw_source_url = str(item.get("asset_url") or "")
         if raw_source_url.startswith("https://"):
