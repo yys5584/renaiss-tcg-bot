@@ -49,6 +49,7 @@ from renaiss_bot.handlers.spawn import (
     spawn_tick,
 )
 from renaiss_bot.services.client import RenaissAPICooldown, fetch_official_price
+from renaiss_bot.services.emoji import icon
 from renaiss_bot.services.market import (
     daily_pick_configuration_issues,
     daily_pick_enabled,
@@ -751,7 +752,7 @@ def ranking_announce_enabled() -> bool:
 
 
 def build_ranking_message(ranking: dict, *, title: str, footer: str | None = None) -> str:
-    lines = [f"📊 <b>{escape(title)}</b>"]
+    lines = [f"{icon('gotcha')} <b>{escape(title)}</b>"]
     for row in ranking.get("rows", [])[:5]:
         rank = int(row.get("rank") or 0)
         marker = _RANK_MEDALS[rank - 1] if 1 <= rank <= 3 else f" {rank}."
@@ -762,8 +763,8 @@ def build_ranking_message(ranking: dict, *, title: str, footer: str | None = Non
     best = ranking.get("best_catch")
     if best:
         lines.append(
-            f"🎣 Top catch: <b>{escape(str(best.get('card_name') or '-'))}</b>"
-            f" · ${float(best.get('fmv_usd') or 0):,.0f}"
+            f"{icon('crystal')} Top catch: <b>{escape(str(best.get('card_name') or '-'))}</b>"
+            f" · {icon('coin')} <b>${float(best.get('fmv_usd') or 0):,.0f}</b>"
             f" · {escape(str(best.get('winner_name') or 'Collector'))}"
         )
     if footer:

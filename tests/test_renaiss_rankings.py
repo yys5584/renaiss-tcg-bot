@@ -34,7 +34,9 @@ def test_build_ranking_message_medals_and_escaping():
     assert "🥇 <b>&lt;b&gt;hax&lt;/b&gt;</b> — 4 catches" in text
     assert "🥈" in text and "🥉" in text
     assert " 4. <b>Quiet</b> — 1 catch" in text
-    assert "🎣 Top catch: <b>Charizard ex</b> · $1,250 · Mina" in text
+    assert "Top catch: <b>Charizard ex</b>" in text
+    assert "<b>$1,250</b>" in text and "Mina" in text
+    assert "<tg-emoji emoji-id=" in text
     assert text.endswith("<i>note</i>")
     assert "<b>hax</b>" not in text
 
