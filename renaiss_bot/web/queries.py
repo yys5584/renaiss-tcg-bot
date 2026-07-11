@@ -155,6 +155,8 @@ def _catalog_cte() -> str:
                 CASE
                     WHEN metadata->>'price_asset_url' LIKE 'https://%'
                     THEN metadata->>'price_asset_url'
+                    WHEN metadata->>'price_asset_url' LIKE '/%'
+                    THEN 'https://index.renaissos.com' || (metadata->>'price_asset_url')
                 END AS renaiss_url
             FROM public.renaiss_catalog_cards
             WHERE is_active = TRUE
@@ -226,6 +228,8 @@ def _catalog_cte() -> str:
                     CASE
                         WHEN c.metadata->>'price_asset_url' LIKE 'https://%'
                         THEN c.metadata->>'price_asset_url'
+                        WHEN c.metadata->>'price_asset_url' LIKE '/%'
+                        THEN 'https://index.renaissos.com' || (c.metadata->>'price_asset_url')
                     END AS renaiss_url
                 FROM public.renaiss_catalog_cards c
                 WHERE c.local_card_id = uc.local_card_id::text
