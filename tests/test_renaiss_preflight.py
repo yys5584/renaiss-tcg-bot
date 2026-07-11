@@ -688,7 +688,7 @@ async def test_telegram_live_gate_rejects_migrated_chat_id(monkeypatch):
 
         async def get_chat(self, chat_id):
             assert chat_id == -5436768436
-            return SimpleNamespace(id=-1003906603409, type="supergroup")
+            return SimpleNamespace(id=-1000000000042, type="supergroup")
 
         async def get_chat_member(self, chat_id, user_id):
             return SimpleNamespace(status="administrator")
@@ -699,7 +699,7 @@ async def test_telegram_live_gate_rejects_migrated_chat_id(monkeypatch):
 
     assert not result.ok
     assert "migrated" in result.detail
-    assert "-1003906603409" in result.detail
+    assert "-1000000000042" in result.detail
 
 
 async def test_telegram_live_gate_does_not_echo_provider_error(monkeypatch):
