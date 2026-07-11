@@ -2,9 +2,18 @@
 
 from __future__ import annotations
 
-from telegram.ext import Application, CallbackQueryHandler, CommandHandler, MessageHandler, filters
+from telegram import Update
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    MessageHandler,
+    TypeHandler,
+    filters,
+)
 
 from renaiss_bot.handlers.callbacks import on_callback
+from renaiss_bot.handlers.ceremony import ceremony_gate
 from renaiss_bot.handlers.cardpack import cmd_mycards, cmd_open, cmd_pack
 from renaiss_bot.handlers.flex import cmd_flex, on_flex_props
 from renaiss_bot.handlers.market import cmd_market, on_market
@@ -20,6 +29,8 @@ from renaiss_bot.handlers.start import cmd_sets, cmd_start
 
 
 def register_handlers(app: Application) -> None:
+    # 22:00 KST 랭킹 발표 동안 그룹 상호작용을 전부 멈춘다 (DM은 계속 동작).
+    app.add_handler(TypeHandler(Update, ceremony_gate), group=-1)
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("sets", cmd_sets))
     app.add_handler(CommandHandler("open", cmd_open))

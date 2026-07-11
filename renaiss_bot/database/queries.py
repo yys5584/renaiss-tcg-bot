@@ -1756,15 +1756,29 @@ async def get_collection_detail(user_id: int | None, *, limit: int = 5) -> dict 
         return None
 
 
+def ranking_period_bounds(
+    period: str, *, now: datetime | None = None
+) -> tuple[datetime, datetime | None]:
+    """KST window for a ranking period: day, week-to-date, or last week."""
+    current = (now or datetime.now(KST)).astimezone(KST)
+    midnight = current.replace(hour=0, minute=0, second=0, microsecond=0)
+    if period == "day":
+        return midnight, None
+    week_start = midnight - timedelta(days=midnight.weekday())
+    if period == "week":
+        return week_start, None
+    if period == "last_week":
+        return week_start - timedelta(days=7), week_start
+    raise ValueError("period must be 'day', 'week', or 'last_week'")
+
+
 async def get_catch_ranking(*, period: str, limit: int = 10) -> dict:
     """KST-boundary catch_won aggregates for the group ranking announcements.
 
-    ``period`` is ``"day"`` (since KST midnight) or ``"week"`` (since KST
-    Monday).  Counts public catch wins only — never asset totals — so the
-    announcement stays aligned with the leaderboard philosophy.
+    Counts public catch wins only — never asset totals — so the announcement
+    stays aligned with the leaderboard philosophy.
     """
-    if period not in {"day", "week"}:
-        raise ValueError("period must be 'day' or 'week'")
+    start_at, end_at = ranking_period_bounds(period)
     limit = max(1, min(20, int(limit)))
     pool = await get_db()
     async with pool.acquire() as conn:
@@ -1775,10 +1789,8 @@ async def get_catch_ranking(*, period: str, limit: int = 10) -> dict:
                 FROM renaiss_events
                 WHERE event_name = 'catch_won'
                   AND user_id IS NOT NULL
-                  AND created_at >= (
-                      date_trunc($1, now() AT TIME ZONE 'Asia/Seoul')
-                      AT TIME ZONE 'Asia/Seoul'
-                  )
+                  AND created_at >= $1
+                  AND ($2::timestamptz IS NULL OR created_at < $2)
             ), per_user AS (
                 SELECT
                     user_id,
@@ -1801,9 +1813,10 @@ async def get_catch_ranking(*, period: str, limit: int = 10) -> dict:
                 DENSE_RANK() OVER (ORDER BY p.catches DESC)::int AS rank
             FROM per_user p
             ORDER BY rank ASC, p.user_id ASC
-            LIMIT $2
+            LIMIT $3
             """,
-            period,
+            start_at,
+            end_at,
             limit,
         )
         best = await conn.fetchrow(
@@ -1815,14 +1828,13 @@ async def get_catch_ranking(*, period: str, limit: int = 10) -> dict:
             FROM renaiss_events
             WHERE event_name = 'catch_won'
               AND user_id IS NOT NULL
-              AND created_at >= (
-                  date_trunc($1, now() AT TIME ZONE 'Asia/Seoul')
-                  AT TIME ZONE 'Asia/Seoul'
-              )
+              AND created_at >= $1
+              AND ($2::timestamptz IS NULL OR created_at < $2)
             ORDER BY COALESCE((metadata->>'fmv_usd')::numeric, 0) DESC, created_at ASC
             LIMIT 1
             """,
-            period,
+            start_at,
+            end_at,
         )
     ranking_rows = [
         {

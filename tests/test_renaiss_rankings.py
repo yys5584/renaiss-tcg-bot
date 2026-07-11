@@ -95,27 +95,25 @@ async def test_announce_posts_once_per_day_via_event_key(monkeypatch):
     bot.send_message.assert_awaited_once()
 
 
-class _FrozenSunday(_FrozenDatetime):
-    _now = datetime(2026, 7, 12, 22, 0)  # Sunday
+class _FrozenMonday(_FrozenDatetime):
+    _now = datetime(2026, 7, 13, 22, 0)  # Monday
 
 
-async def test_announce_adds_weekly_final_on_sunday(monkeypatch):
+async def test_announce_adds_last_week_final_on_monday(monkeypatch):
     monkeypatch.delenv("RENAISS_RANKING_ANNOUNCE_ENABLED", raising=False)
     monkeypatch.setattr(jobs, "official_chat_id", lambda: -1001)
-    monkeypatch.setattr(jobs, "datetime", _FrozenSunday)
+    monkeypatch.setattr(jobs, "datetime", _FrozenMonday)
     daily = _ranking(rows=[{"rank": 1, "winner_name": "Mina", "catches": 3}])
     weekly = _ranking(rows=[{"rank": 1, "winner_name": "Leo", "catches": 9}])
-    monkeypatch.setattr(
-        jobs,
-        "get_catch_ranking",
-        AsyncMock(side_effect=[daily, weekly]),
-    )
+    ranking_mock = AsyncMock(side_effect=[daily, weekly])
+    monkeypatch.setattr(jobs, "get_catch_ranking", ranking_mock)
     monkeypatch.setattr(jobs, "log_event", AsyncMock(return_value=True))
     bot = SimpleNamespace(send_message=AsyncMock())
 
     await announce_daily_ranking_job(SimpleNamespace(bot=bot))
 
     assert bot.send_message.await_count == 2
+    assert ranking_mock.await_args_list[1].kwargs["period"] == "last_week"
     weekly_text = bot.send_message.await_args_list[1].args[1]
-    assert "Weekly Final" in weekly_text
+    assert "Weekly Final · 2026-W28" in weekly_text
     assert "Leo" in weekly_text

@@ -48,6 +48,7 @@ from renaiss_bot.handlers.spawn import (
     spawn_interval_bounds,
     spawn_tick,
 )
+from renaiss_bot.services.ceremony import ceremony_minutes
 from renaiss_bot.services.client import RenaissAPICooldown, fetch_official_price
 from renaiss_bot.services.emoji import icon
 from renaiss_bot.services.market import (
@@ -773,7 +774,7 @@ def build_ranking_message(ranking: dict, *, title: str, footer: str | None = Non
 
 
 async def announce_daily_ranking_job(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """22:00 KST — post today's catch ranking; Sundays add the weekly final."""
+    """22:00 KST — post today's catch ranking; Mondays add last week's final."""
     if not ranking_announce_enabled():
         return
     chat_id = official_chat_id()
@@ -801,22 +802,25 @@ async def announce_daily_ranking_job(context: ContextTypes.DEFAULT_TYPE) -> None
                 build_ranking_message(
                     daily,
                     title=f"Daily Catch Ranking · {now_kst.strftime('%b %d')} (KST)",
-                    footer="Posted every night at 22:00 KST.",
+                    footer=(
+                        "Spawns and commands are paused for the ceremony — "
+                        f"the room reopens at 22:{ceremony_minutes():02d} KST."
+                    ),
                 ),
                 parse_mode="HTML",
             )
     else:
         logger.info("Daily ranking skipped: no catches today.")
 
-    if now_kst.weekday() == 6:  # Sunday — weekly final before the Monday reset
+    if now_kst.weekday() == 0:  # Monday — last week's final
         try:
-            weekly = await get_catch_ranking(period="week", limit=10)
+            weekly = await get_catch_ranking(period="last_week", limit=10)
         except Exception as exc:
             logger.warning("Weekly ranking query failed: %s", exc)
             return
         if not weekly["rows"]:
             return
-        week_key = now_kst.strftime("%G-W%V")
+        week_key = (now_kst - timedelta(days=7)).strftime("%G-W%V")
         claimed = await log_event(
             "weekly_rank_posted",
             event_key=f"weekly-rank:{chat_id}:{week_key}",
@@ -829,7 +833,7 @@ async def announce_daily_ranking_job(context: ContextTypes.DEFAULT_TYPE) -> None
                 build_ranking_message(
                     weekly,
                     title=f"Weekly Final · {week_key}",
-                    footer="Weekly board restarts Monday 00:00 KST. Congrats, collectors!",
+                    footer="Last week's board is settled. Congrats, collectors!",
                 ),
                 parse_mode="HTML",
             )
@@ -865,7 +869,7 @@ def register_jobs(application: Application) -> None:
         name="renaiss_daily_ranking_announce",
         job_kwargs={"misfire_grace_time": None},
     )
-    logger.info("Daily catch ranking announce scheduled at 22:00 KST (weekly final on Sundays).")
+    logger.info("Daily catch ranking announce scheduled at 22:00 KST (weekly final on Mondays).")
 
     # Admission can close instantly, but existing T+24 picks and outbox rows are
     # obligations. Drain workers therefore run whenever the DB-backed bot runs.
