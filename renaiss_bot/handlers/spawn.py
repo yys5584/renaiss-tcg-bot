@@ -226,6 +226,7 @@ class ActiveSpawn:
     closing: bool = False
     telemetry_failure_count: int = 0
     prompt_is_photo: bool = False
+    receipt_message_ids: list[int] = field(default_factory=list)
 
 
 _active: dict[int, ActiveSpawn] = {}
@@ -626,15 +627,19 @@ async def catch_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 )
             except Exception:
                 pass
-            # 시즌1식 참가 확인: 등록 답장을 보내고 명령과 같은 주기로 청소한다.
+            # 시즌1식 참가 액션("포켓볼을 던졌다!")의 가챠 버전. 리빌 때 일괄
+            # 삭제하고, 라운드가 비정상 종료돼도 남지 않게 60초 폴백 청소를 건다.
             if update.effective_message:
                 try:
                     receipt = await update.effective_message.reply_text(
-                        f"🎯 <b>{escape(_display_name(update))}</b> entered the draw — "
-                        f"{entry_count} catching",
+                        f"🪙 <b>{escape(_display_name(update))}</b> inserted a coin! "
+                        f"({entry_count} in)",
                         parse_mode="HTML",
                         disable_notification=True,
                     )
+                    async with _lock(chat_id):
+                        if _active.get(chat_id) is refresh_active:
+                            refresh_active.receipt_message_ids.append(receipt.message_id)
                     job_queue = getattr(context, "job_queue", None)
                     if job_queue is not None:
                         job_queue.run_once(
@@ -962,6 +967,13 @@ async def _resolve(context: ContextTypes.DEFAULT_TYPE, active: ActiveSpawn) -> N
             reveal_posted = True
         except Exception as exc:
             logger.warning("Spawn reveal delivery failed session=%s: %s", active.token, exc)
+
+    # 시즌1처럼 결과가 붙는 순간 참가 액션 메시지를 정리한다 (best-effort).
+    for receipt_id in active.receipt_message_ids:
+        try:
+            await context.bot.delete_message(chat_id=active.chat_id, message_id=receipt_id)
+        except Exception:
+            pass
 
     # Market Board is post-reveal only. Never expose a hidden value through /market first.
     if reveal_posted:
