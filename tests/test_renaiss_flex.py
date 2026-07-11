@@ -117,7 +117,10 @@ async def test_concurrent_flex_commands_reserve_once_before_public_send(monkeypa
         "market_price_usd": 430,
     }
     reserve = AsyncMock(
-        side_effect=[{"state": "reserved"}, {"state": "user_already"}]
+        side_effect=[
+            {"state": "reserved"},
+            {"state": "user_cooldown", "retry_after_seconds": 42},
+        ]
     )
     complete = AsyncMock(return_value=True)
     monkeypatch.setattr("renaiss_bot.handlers.flex.get_flex_card", AsyncMock(return_value=card))
@@ -155,8 +158,8 @@ async def test_concurrent_flex_commands_reserve_once_before_public_send(monkeypa
     complete.assert_awaited_once()
     all_text = [text for message in messages for text, _ in message.sent]
     assert sum("is flexing" in text for text in all_text) == 1
-    assert sum("already flexed today" in text for text in all_text) == 0
-    assert "already flexed today" in private_send.await_args.kwargs["text"]
+    assert sum("ready again" in text for text in all_text) == 0
+    assert "ready again in about 42s" in private_send.await_args.kwargs["text"]
 
 
 async def test_cancelled_flex_render_releases_unsent_reservation(monkeypatch):
@@ -313,7 +316,7 @@ async def test_flex_card_query_excludes_tutorial_collectible(monkeypatch):
 async def test_flex_room_lock_binds_integer_chat_id_as_bigint(monkeypatch):
     connection = SimpleNamespace(
         execute=AsyncMock(),
-        fetchval=AsyncMock(side_effect=[None, False]),
+        fetchval=AsyncMock(side_effect=[None, None]),
         fetchrow=AsyncMock(
             side_effect=[
                 {"total_posts": 0, "latest_at": None},

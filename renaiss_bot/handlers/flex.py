@@ -152,11 +152,12 @@ async def cmd_flex(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
     reservation_state = str(reservation.get("state") or "")
-    if reservation_state == "user_already":
+    if reservation_state == "user_cooldown":
+        retry_after = max(1, int(reservation.get("retry_after_seconds") or 1))
         await _private_room_gate_notice(
             update,
             context,
-            "You already flexed today — come back tomorrow!",
+            f"Nice streak! /flex is ready again in about {retry_after}s.",
         )
         return
 

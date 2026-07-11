@@ -1303,15 +1303,18 @@ async def reserve_daily_flex(
     reservation_token: str,
     card: dict,
 ) -> dict:
-    """Atomically enforce both the user/day and official-room noise budget."""
+    """Atomically enforce both the per-user cooldown and room noise budget."""
     if user_id <= 0 or chat_id == 0 or not reservation_token or len(reservation_token) > 128:
         raise ValueError("invalid flex reservation")
     pool = await get_db()
+    user_cooldown_seconds = _bounded_env_int(
+        "RENAISS_FLEX_USER_COOLDOWN_SECONDS", 60, minimum=5, maximum=86400
+    )
     room_daily_limit = _bounded_env_int(
-        "RENAISS_FLEX_ROOM_DAILY_LIMIT", 3, minimum=1, maximum=100
+        "RENAISS_FLEX_ROOM_DAILY_LIMIT", 60, minimum=1, maximum=500
     )
     room_cooldown_seconds = _bounded_env_int(
-        "RENAISS_FLEX_ROOM_COOLDOWN_SECONDS", 300, minimum=30, maximum=3600
+        "RENAISS_FLEX_ROOM_COOLDOWN_SECONDS", 60, minimum=10, maximum=3600
     )
     reservation_ttl_seconds = _bounded_env_int(
         "RENAISS_FLEX_RESERVATION_TTL_SECONDS", 300, minimum=60, maximum=1800
@@ -1345,26 +1348,31 @@ async def reserve_daily_flex(
             """,
             user_id,
         )
-        already_used = await conn.fetchval(
+        last_user_flex = await conn.fetchval(
             """
-            SELECT EXISTS (
-                SELECT 1
-                FROM renaiss_flex_daily_slots
-                WHERE user_id = $1
-                  AND flex_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul')::date
-                  AND state <> 'dead'
-            ) OR EXISTS (
-                SELECT 1
-                FROM renaiss_flex_posts
-                WHERE user_id = $1
-                  AND (flexed_at AT TIME ZONE 'Asia/Seoul')::date =
-                      (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul')::date
+            SELECT GREATEST(
+                (
+                    SELECT MAX(COALESCE(sent_at, updated_at, created_at))
+                    FROM renaiss_flex_daily_slots
+                    WHERE user_id = $1 AND state <> 'dead'
+                ),
+                (SELECT MAX(flexed_at) FROM renaiss_flex_posts WHERE user_id = $1)
             )
             """,
             user_id,
         )
-        if already_used:
-            return {"state": "user_already"}
+        if last_user_flex is not None:
+            if last_user_flex.tzinfo is None:
+                last_user_flex = last_user_flex.replace(tzinfo=timezone.utc)
+            user_elapsed = (
+                datetime.now(timezone.utc) - last_user_flex.astimezone(timezone.utc)
+            ).total_seconds()
+            user_retry_after = max(0, int(user_cooldown_seconds - user_elapsed + 0.999))
+            if user_retry_after > 0:
+                return {
+                    "state": "user_cooldown",
+                    "retry_after_seconds": user_retry_after,
+                }
 
         room = await conn.fetchrow(
             """
@@ -1423,7 +1431,6 @@ async def reserve_daily_flex(
                 $1,
                 (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul')::date,
                 $2,$3,'reserved',$4,$5,$6,$7
-            ON CONFLICT (user_id, flex_date) DO NOTHING
             RETURNING user_id, flex_date, reservation_token, state
             """,
             user_id,
@@ -1434,7 +1441,7 @@ async def reserve_daily_flex(
             card.get("grade"),
             card.get("market_price_usd"),
         )
-    return dict(row) if row is not None else {"state": "user_already"}
+    return dict(row) if row is not None else {"state": "error"}
 
 
 async def complete_daily_flex(

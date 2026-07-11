@@ -83,7 +83,9 @@ async def test_schema_is_additive_and_excludes_trading_tables():
     assert "unique (chat_id, cohort_pick_date)" in sql
     assert "idx_renaiss_result_bell_dispatch" in sql
     assert "create table if not exists renaiss_flex_daily_slots" in sql
-    assert "primary key (user_id, flex_date)" in sql
+    assert "drop constraint if exists renaiss_flex_daily_slots_pkey" in sql
+    assert "idx_renaiss_flex_daily_slots_token" in sql
+    assert "idx_renaiss_flex_daily_slots_user_date" in sql
     assert "create table if not exists renaiss_events" in sql
     assert "create table if not exists renaiss_referral_links" in sql
     assert "alter column price_updated_at drop not null" in sql

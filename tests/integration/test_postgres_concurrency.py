@@ -470,7 +470,7 @@ async def test_concurrent_daily_flex_reserves_and_publishes_once(postgres_pool):
         )
     )
     assert sum(row["state"] == "reserved" for row in reservations) == 1
-    assert sum(row["state"] == "user_already" for row in reservations) == 7
+    assert sum(row["state"] == "user_cooldown" for row in reservations) == 7
     winner = next(
         token for token, row in zip(tokens, reservations) if row["state"] == "reserved"
     )

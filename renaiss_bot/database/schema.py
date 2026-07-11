@@ -498,9 +498,28 @@ async def create_tables(pool: asyncpg.Pool) -> None:
                 created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
                 updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
                 sent_at TIMESTAMPTZ,
-                PRIMARY KEY (user_id, flex_date),
                 CHECK (state <> 'sent' OR (message_id IS NOT NULL AND sent_at IS NOT NULL))
             )
+            """
+        )
+        # Flex moved from one-per-day to a short cooldown: the old
+        # (user_id, flex_date) primary key must not survive on live tables.
+        await conn.execute(
+            """
+            ALTER TABLE renaiss_flex_daily_slots
+                DROP CONSTRAINT IF EXISTS renaiss_flex_daily_slots_pkey
+            """
+        )
+        await conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_renaiss_flex_daily_slots_token
+                ON renaiss_flex_daily_slots(reservation_token)
+            """
+        )
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_renaiss_flex_daily_slots_user_date
+                ON renaiss_flex_daily_slots(user_id, flex_date)
             """
         )
         await conn.execute(
