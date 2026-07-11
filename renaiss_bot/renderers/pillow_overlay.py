@@ -11,7 +11,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 WIDTH = 1080
 HEIGHT = 1350
-TEMPLATE_VERSION = "slab-land-v3"
+TEMPLATE_VERSION = "slab-land-v4"
 _LOGO_PNG_PATH = Path(__file__).resolve().parents[1] / "assets" / "renaiss_logo.png"
 _FONTS_DIR = Path(__file__).resolve().parents[1] / "assets" / "fonts"
 
@@ -293,25 +293,25 @@ def render_slab_landscape(
 
     slab = template.copy()
     draw = ImageDraw.Draw(slab)
+    # 원본 Renaiss 렌더의 PSA 정품 라벨: 빨간 테두리 + 우측 등급 블록.
+    PSA_RED = "#DA2128"
     draw.rectangle(
         (_SLAB_LABEL[0] + 1, _SLAB_LABEL[1] + 1, _SLAB_LABEL[2] - 1, _SLAB_LABEL[3] - 1),
-        outline=color,
-        width=6,
+        outline=PSA_RED,
+        width=7,
     )
     label_center_y = (_SLAB_LABEL[1] + _SLAB_LABEL[3]) // 2
-    tier_font = _font(52)
-    tier_width = draw.textlength(tier_label, font=tier_font)
-    draw.text(
-        (_SLAB_LABEL[2] - 26, label_center_y),
-        tier_label,
-        fill=color,
-        font=tier_font,
-        anchor="rm",
+    # 우측: PSA 10 블록 (실제 PSA 라벨처럼 회사명 위, 큰 등급 숫자 아래)
+    right_x = _SLAB_LABEL[2] - 26
+    draw.text((right_x, label_center_y - 24), "PSA", fill=PSA_RED, font=_font(30), anchor="rm")
+    draw.text((right_x, label_center_y + 16), "10", fill=(15, 15, 15), font=_font(50), anchor="rm")
+    block_width = max(
+        draw.textlength("PSA", font=_font(30)),
+        draw.textlength("10", font=_font(50)),
     )
-    # 이름은 티어 배지와 겹치지 않게 남은 폭에 맞춰 폰트를 줄이고,
-    # 그 아래 감정등급(PSA 10)을 원본 슬랩 라벨처럼 병기한다.
+    # 좌측: 이름 + GEM MINT 서브라인, 등급 블록과 겹치지 않게 자동 축소
     label_text = label_name if label_name is not None else name
-    available = (_SLAB_LABEL[2] - 26 - tier_width - 18) - (_SLAB_LABEL[0] + 26)
+    available = (right_x - block_width - 20) - (_SLAB_LABEL[0] + 26)
     name_font = _font(38)
     for size in range(38, 19, -2):
         name_font = _font(size)
@@ -328,14 +328,13 @@ def render_slab_landscape(
         font=name_font,
         anchor="lm",
     )
-    if grading_label:
-        draw.text(
-            (_SLAB_LABEL[0] + 26, label_center_y + 26),
-            grading_label[:22],
-            fill=(100, 100, 100),
-            font=_font(22),
-            anchor="lm",
-        )
+    draw.text(
+        (_SLAB_LABEL[0] + 26, label_center_y + 26),
+        "GEM MINT",
+        fill=(100, 100, 100),
+        font=_font(22),
+        anchor="lm",
+    )
     card = _load_card_image(card_image)
     if card is not None:
         fitted = ImageOps.contain(

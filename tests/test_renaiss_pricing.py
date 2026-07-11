@@ -139,7 +139,9 @@ def test_branded_overlay_hides_unverified_collection_values():
         source_identity_key=card_identity_key(card),
     )
 
-    assert _price_text(card, candidate).startswith("~$")  # 미검증 참고가는 추정 표기
+    # 운영자 결정(2026-07-12): 이미지에도 참고가를 그대로 표시한다.
+    # 검증 여부는 캡션(✅/🧪)이 전달한다.
+    assert _price_text(card, candidate) == "$430.00"
     assert _price_text(card, exact) == "$430.00"
 
 
