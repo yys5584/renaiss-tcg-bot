@@ -12,14 +12,15 @@ from renaiss_bot.database.connection import get_db
 from renaiss_bot.web.auth import collector_pseudonym
 
 
-GRADES = ("R", "RR", "AR", "SR", "SAR", "UR", "MUR")
+GRADES = ("C", "U", "R", "RR", "AR", "SR", "SAR", "UR", "MUR")
 MIN_PUBLIC_CATALOG_CARDS = 10
 CATALOG_CATEGORY = "pokemon_tcg"
-_GRADE_SQL = "'R', 'RR', 'AR', 'SR', 'SAR', 'UR', 'MUR'"
+_GRADE_SQL = "'C', 'U', 'R', 'RR', 'AR', 'SR', 'SAR', 'UR', 'MUR'"
 _GRADE_ORDER_SQL = """
 CASE UPPER(COALESCE(d.grade, 'R'))
-    WHEN 'MUR' THEN 7 WHEN 'UR' THEN 6 WHEN 'SAR' THEN 5
-    WHEN 'SR' THEN 4 WHEN 'AR' THEN 3 WHEN 'RR' THEN 2 ELSE 1
+    WHEN 'MUR' THEN 9 WHEN 'UR' THEN 8 WHEN 'SAR' THEN 7
+    WHEN 'SR' THEN 6 WHEN 'AR' THEN 5 WHEN 'RR' THEN 4
+    WHEN 'R' THEN 3 WHEN 'U' THEN 2 ELSE 1
 END
 """
 _HOST_PATTERN = re.compile(r"^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$")
