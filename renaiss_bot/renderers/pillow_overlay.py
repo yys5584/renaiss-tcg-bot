@@ -11,7 +11,8 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 WIDTH = 1080
 HEIGHT = 1350
-TEMPLATE_VERSION = "pillow-v1"
+TEMPLATE_VERSION = "pillow-v2"
+_LOGO_PNG_PATH = Path(__file__).resolve().parents[1] / "assets" / "renaiss_logo.png"
 
 
 def _font_candidates(*, mono: bool, bold: bool) -> list[str]:
@@ -66,6 +67,16 @@ def _centered_text(
     draw.text((x, y), text, font=selected, fill=fill)
 
 
+@lru_cache(maxsize=1)
+def _brand_logo() -> Image.Image | None:
+    try:
+        with Image.open(_LOGO_PNG_PATH) as source:
+            source.load()
+            return source.convert("RGBA")
+    except OSError:
+        return None
+
+
 @lru_cache(maxsize=16)
 def _fixed_frame(kind: str, style_items: tuple[tuple[str, str], ...]) -> Image.Image:
     """Build one immutable frame per visual grade; callers always copy it."""
@@ -77,8 +88,13 @@ def _fixed_frame(kind: str, style_items: tuple[tuple[str, str], ...]) -> Image.I
     draw.rounded_rectangle(label, radius=12, fill="#17150f", outline=style["outer"], width=4)
     draw.line((504, 52, 504, 154), fill="#4a473e", width=2)
 
-    brand_font = _font(68)
-    draw.text((72, 63), "renaiss", font=brand_font, fill="#F2EAD2")
+    logo = _brand_logo()
+    if logo is not None:
+        fitted = ImageOps.contain(logo, (410, 104), method=Image.Resampling.LANCZOS)
+        canvas.alpha_composite(fitted, (72, 103 - fitted.height // 2))
+    else:
+        brand_font = _font(68)
+        draw.text((72, 63), "renaiss", font=brand_font, fill="#F2EAD2")
 
     joined = (514, 47, 1028, 159)
     draw.rounded_rectangle(joined, radius=10, fill=style["wrap"], outline=style["wrap"], width=5)
@@ -120,6 +136,7 @@ def render_fixed_overlay(
     style: Mapping[str, str],
     grade_text: str,
     price_text: str,
+    placeholder_text: str | None = None,
 ) -> bytes:
     """Composite only the variable card and labels onto a cached fixed frame."""
     style_items = tuple(sorted((str(key), str(value)) for key, value in style.items()))
@@ -147,6 +164,15 @@ def render_fixed_overlay(
         x = 540 - (fitted.width // 2)
         y = 771 - (fitted.height // 2)
         canvas.alpha_composite(fitted, (x, y))
+    elif placeholder_text:
+        # 블라인드 프롬프트: 카드 자리를 등급색 물음표로 채운다.
+        _centered_text(
+            draw,
+            (200, 380, 880, 1160),
+            placeholder_text,
+            fill=style["grade_fg"],
+            start_size=520,
+        )
 
     output = BytesIO()
     canvas.convert("RGB").save(output, format="PNG", compress_level=3)
