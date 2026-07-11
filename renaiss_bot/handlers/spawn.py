@@ -38,7 +38,11 @@ from renaiss_bot.services.market import (
     exact_price_lookup_configured,
     market_card_eligible,
 )
-from renaiss_bot.services.media_cache import get_telegram_file_id, remember_telegram_photo
+from renaiss_bot.services.media_cache import (
+    delete_telegram_file_id,
+    get_telegram_file_id,
+    remember_telegram_photo,
+)
 from renaiss_bot.services.models import RenaissPrice
 from renaiss_bot.services.price_evidence import catalog_reference_price
 from renaiss_bot.services.quiz import build_price_options, format_distribution, format_price_option
@@ -835,6 +839,8 @@ async def _resolve(context: ContextTypes.DEFAULT_TYPE, active: ActiveSpawn) -> N
             reveal_posted = True
             await _clear_prompt(context, active, caught=winner_id is not None)
         except BadRequest as exc:
+            if isinstance(image_payload, str):
+                await delete_telegram_file_id(render_key)
             logger.debug("Spawn photo reveal failed; falling back to text: %s", exc)
         except (TimedOut, NetworkError) as exc:
             reveal_delivery_unknown = True

@@ -30,7 +30,11 @@ from renaiss_bot.services.flex import (
     build_flex_caption,
 )
 from renaiss_bot.services.features import pack_economy_enabled, private_free_packs_enabled
-from renaiss_bot.services.media_cache import get_telegram_file_id, remember_telegram_photo
+from renaiss_bot.services.media_cache import (
+    delete_telegram_file_id,
+    get_telegram_file_id,
+    remember_telegram_photo,
+)
 from renaiss_bot.services.models import CardIdentity, RenaissPrice
 
 logger = logging.getLogger(__name__)
@@ -247,6 +251,8 @@ async def cmd_flex(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
         raise
     except (BadRequest, Forbidden) as exc:
+        if isinstance(image_payload, str):
+            await delete_telegram_file_id(render_key)
         try:
             await release_daily_flex_reservation(reservation_token=reservation_token)
         except Exception:

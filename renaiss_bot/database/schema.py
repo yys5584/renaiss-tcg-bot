@@ -512,11 +512,13 @@ async def create_tables(pool: asyncpg.Pool) -> None:
         await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS renaiss_telegram_media_cache (
-                render_key TEXT PRIMARY KEY,
+                bot_id BIGINT NOT NULL,
+                render_key TEXT NOT NULL,
                 telegram_file_id TEXT NOT NULL,
                 telegram_file_unique_id TEXT,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
                 updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                PRIMARY KEY (bot_id, render_key),
                 CHECK (length(render_key) = 64),
                 CHECK (length(telegram_file_id) BETWEEN 1 AND 512)
             )

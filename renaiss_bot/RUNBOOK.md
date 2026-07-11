@@ -1,8 +1,8 @@
 # Renaiss Bot Runbook
 
-> Renderer safety: run Telegram and Discord under a dedicated
-> non-administrator/non-root service account. Keep Chromium's process sandbox
-> enabled and never add `--no-sandbox`; rendering failures use the text fallback.
+> Renderer safety: the default renderer uses a fixed Pillow frame and never starts
+> Chromium. Keep image host/size allowlists enabled; rendering failures use the
+> text fallback. Telegram `file_id` values are cached per expected bot id.
 >
 > Public `/flex` defaults to a shared 3-post daily room cap and a 300-second
 > minimum interval. Review `RENAISS_FLEX_ROOM_DAILY_LIMIT` and
@@ -59,11 +59,8 @@ launcher의 bounded log runner 기본값은 파일당 10 MiB와 백업 5개다.
 64 KiB~1 GiB, 백업 0~20개이며 범위를 벗어나면 서비스 모듈을 실행하지 않는다.
 
 runner는 별도 wrapper child를 만들지 않고 같은 PID에서 서비스 모듈을 실행한다.
-다만 Task action의 `cmd.exe`와 렌더링 중 생성되는 Playwright/Chromium child까지
-Task Scheduler의 강제 종료가 정리한다고 보장할 수는 없다. 파일럿 전 stop rehearsal에서
-parent/child PID, 실행 경로, 서비스 계정을 대조하고 모든 descendant의 종료를 확인한다.
-보장할 수 없으면 kill-on-close Job Object 또는 process-tree 수명주기를 관리하는 전용
-Windows 서비스 관리자를 사용한다. Python은 계속 `-u`로 실행하고 fd 1과 2를 하나의
+파일럿 전 stop rehearsal에서 parent PID, 실행 경로, 서비스 계정을 대조한다.
+Python은 계속 `-u`로 실행하고 fd 1과 2를 하나의
 pipe로 합쳐 Python logging, traceback, native stdout/stderr를 한 writer가 기록한다.
 writer만 active 파일을 열며 회전 전에 닫기 때문에 Windows에서 실행 중인 서비스가 자기
 로그 rename을 막지 않는다.
@@ -79,12 +76,9 @@ active와 각 백업은 큰 단일 출력 chunk도 설정 크기를 넘지 않�
 서비스 로그를 두 runner가 동시에 회전하지 못하게 하며 정상 종료 뒤 파일은 남아 있어도
 잠금은 해제된다. lock 파일을 삭제해 실행 중인 잠금을 우회하지 않는다.
 
-Playwright 쓰기 권한도 소스 트리에 섞지 않는다. 브라우저 설치 캐시는 예를 들어
-`%ProgramData%\Renaiss\playwright-cache`처럼 별도 경로에 두고
-`PLAYWRIGHT_BROWSERS_PATH`로 고정한다. 설치·업데이트 계정에만 그 캐시의 `Modify`를
-주고 서비스 계정에는 정상 실행에 필요한 `Read & Execute`만 준다. Chromium의 임시
-프로필은 서비스 계정 전용의 외부 `TEMP`/`TMP` 경로에 `Modify`를 준다. secret 파일은
-또 다른 외부 경로에 두고 서비스 계정에는 `Read`만 허용한다.
+Pillow 프레임과 완성 PNG의 bounded cache는 프로세스 메모리만 사용한다. Telegram
+`file_id` 캐시는 PostgreSQL에 bot id별로 저장한다. secret 파일은 소스 밖의 외부
+경로에 두고 서비스 계정에는 `Read`만 허용한다.
 
 ## 로컬 스모크 테스트
 
@@ -238,8 +232,7 @@ stop을 요청하고 60초까지 회복·종료되지 않으면 같은 PID를 ha
 transaction-pooling endpoint에서는 session lock 소유권이 client connection과 일치하지
 않으므로 시작 설정으로 금지한다. 이 fence는 다른 DB를 쓰는 레거시 poller까지 볼 수 없으므로
 토큰 기준 process/task inventory와 plain `c` E2E를 대체하지 않는다. 같은 PID의 hard
-exit도 Playwright/Chromium descendant 종료 증거는 아니므로 stop rehearsal 또는 Job
-Object/서비스 관리자의 process-tree 보장을 별도로 확인한다.
+exit와 별개로 stop rehearsal에서 poller 종료와 advisory lock 해제를 확인한다.
 
 ## 파일럿 운영 가시성
 

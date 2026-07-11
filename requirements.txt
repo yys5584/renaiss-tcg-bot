@@ -4,4 +4,3 @@ python-dotenv==1.2.2
 aiohttp==3.13.3
 Pillow==12.1.1
 cryptography>=46,<47
-playwright==1.58.0

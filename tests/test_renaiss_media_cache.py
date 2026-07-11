@@ -21,7 +21,7 @@ class _Connection:
         self.file_id = None
         self.execute_args = None
 
-    async def fetchval(self, query, render_key):
+    async def fetchval(self, query, *args):
         return self.file_id
 
     async def execute(self, query, *args):
@@ -47,7 +47,7 @@ async def test_telegram_file_id_cache_round_trip(monkeypatch):
     render_key = "a" * 64
 
     assert await media_cache.store_telegram_file_id(render_key, "telegram-file", "unique")
-    assert connection.execute_args == (render_key, "telegram-file", "unique")
+    assert connection.execute_args == (0, render_key, "telegram-file", "unique")
     connection.file_id = "telegram-file"
     assert await media_cache.get_telegram_file_id(render_key) == "telegram-file"
 

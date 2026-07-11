@@ -12,12 +12,11 @@ NFT 소유권을 제공하지 않습니다. 개인 무료팩은 공개 루프 �
 cd C:\Users\Administrator\Desktop\renaiss-tcg-bot
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r renaiss_bot\requirements.txt
-.\.venv\Scripts\python.exe -m playwright install chromium
 ```
 
-Run the service under a dedicated non-administrator/non-root account. Chromium's
-process sandbox intentionally remains enabled; do not add `--no-sandbox`. A
-renderer failure falls back to a text card post.
+Run the service under a dedicated non-administrator/non-root account. The fixed-frame
+Pillow renderer does not start a browser. Keep remote image host and byte allowlists
+enabled; a renderer failure falls back to a text card post.
 
 `/flex` is user-invoked and collaboration-room only. Its shared room budget defaults
 to 3 posts/day with a 300-second interval (`RENAISS_FLEX_ROOM_DAILY_LIMIT`,
@@ -166,7 +165,7 @@ Windows launcher는 저장소의 `.venv`만 사용합니다. 별도 전용 가�
 다른 절대 로컬 경로는 launcher의 프로세스 환경 `RENAISS_LOG_DIR`로 지정합니다.
 로그는 기본 10 MiB active 1개와 백업 5개로 제한됩니다. 크기와 백업 수를 바꿀 때는
 launcher 프로세스 환경의 `RENAISS_LOG_MAX_BYTES`, `RENAISS_LOG_BACKUPS`를 사용합니다.
-세부 ACL, 회전 실패 정책, Playwright 외부 캐시 배치는 `RUNBOOK.md`를 따릅니다.
+세부 ACL과 회전 실패 정책은 `RUNBOOK.md`를 따릅니다.
 Windows Telegram 파일럿의 Task Scheduler·단일 인스턴스·rollback 기준은
 [`ops/README.md`](ops/README.md)에 있습니다. 문서 추가만으로 task가 등록되지는 않습니다.
 

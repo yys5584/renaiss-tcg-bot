@@ -17,14 +17,13 @@ with experimental reference values, and test your insight by guessing hidden FMV
 - **Blind market spawns** — `c` to enter a random draw, guess the hidden FMV, then compare the room's picks
 - **First-c onboarding** — one lifetime, collection-only Welcome Card with no FMV or scored use
 - **Daily Market Pick** — choose one verified card in DM, persist its first valid 24h result, and share a privacy-safe public bell
-- **Card images** — self-contained Playwright renderer with grader slab labels
+- **Card images** — cached fixed-frame Pillow compositor with Telegram `file_id` reuse
 
 ## Setup
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m playwright install chromium
 Copy-Item renaiss_bot\.env.example .env   # then fill in the values
 .\.venv\Scripts\python.exe -m renaiss_bot.main
 ```

@@ -67,7 +67,7 @@ def _overlay_gate() -> asyncio.Semaphore:
 
 def _cache_limit(name: str, default: int) -> int:
     try:
-        return min(128, max(4, int(os.getenv(name, str(default)))))
+        return min(64, max(4, int(os.getenv(name, str(default)))))
     except ValueError:
         return default
 
@@ -111,7 +111,7 @@ async def _cached_image_data_uri(url: str | None) -> str | None:
         _IMAGE_CACHE,
         key,
         value,
-        limit=_cache_limit("RENAISS_RENDER_IMAGE_CACHE_SIZE", 32),
+        limit=_cache_limit("RENAISS_RENDER_IMAGE_CACHE_SIZE", 8),
     )
     return value
 
@@ -566,7 +566,7 @@ async def _render_overlay_card(card: CardIdentity, price: RenaissPrice) -> bytes
         _FINAL_CACHE,
         cache_key,
         rendered,
-        limit=_cache_limit("RENAISS_RENDER_FINAL_CACHE_SIZE", 32),
+        limit=_cache_limit("RENAISS_RENDER_FINAL_CACHE_SIZE", 16),
     )
     return rendered
 

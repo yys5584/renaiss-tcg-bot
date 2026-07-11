@@ -575,6 +575,56 @@ async def test_open_recovers_a_completed_pack_after_uncertain_finalize(monkeypat
     assert "could not be safely saved" not in message.replies[0]
 
 
+async def test_open_reuses_telegram_file_id_without_rendering(monkeypatch):
+    message = SimpleNamespace(
+        message_id=44,
+        reply_text=AsyncMock(),
+        reply_photo=AsyncMock(return_value=SimpleNamespace(photo=[])),
+    )
+    update = SimpleNamespace(
+        update_id=104,
+        effective_message=message,
+        effective_user=SimpleNamespace(id=7),
+        effective_chat=SimpleNamespace(id=11, type="private"),
+        callback_query=None,
+    )
+    reservation = PackOpenReservation(
+        request_id="telegram:104:open",
+        status="reserved",
+        allowed_count=1,
+        used_before=0,
+        quota_date=date(2026, 7, 11),
+        created=True,
+    )
+    render = AsyncMock(return_value=b"should-not-render")
+    monkeypatch.setattr(
+        "renaiss_bot.handlers.cardpack.reserve_command_free_packs",
+        AsyncMock(return_value=reservation),
+    )
+    monkeypatch.setattr(
+        "renaiss_bot.handlers.cardpack.open_pack",
+        AsyncMock(return_value=_pack_result()),
+    )
+    monkeypatch.setattr(
+        "renaiss_bot.handlers.cardpack.finalize_command_free_pack",
+        AsyncMock(return_value=True),
+    )
+    monkeypatch.setattr(
+        "renaiss_bot.handlers.cardpack.get_telegram_file_id",
+        AsyncMock(return_value="telegram-cached-file"),
+    )
+    monkeypatch.setattr("renaiss_bot.handlers.cardpack.render_overlay_card", render)
+    monkeypatch.setattr(
+        "renaiss_bot.handlers.cardpack.build_tracked_url",
+        AsyncMock(return_value=None),
+    )
+
+    await cmd_open(update, SimpleNamespace(args=[]))
+
+    render.assert_not_awaited()
+    assert message.reply_photo.await_args.kwargs["photo"] == "telegram-cached-file"
+
+
 def test_collection_achievements_do_not_reward_accumulated_wealth():
     achievements = _build_achievements(
         {

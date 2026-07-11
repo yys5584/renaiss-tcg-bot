@@ -22,6 +22,7 @@ from renaiss_bot.services.captions import format_pack_caption
 from renaiss_bot.services.features import private_free_packs_enabled
 from renaiss_bot.services.market import daily_pick_enabled
 from renaiss_bot.services.media_cache import (
+    delete_telegram_file_id,
     get_telegram_file_id,
     remember_telegram_photo,
 )
@@ -371,6 +372,8 @@ async def cmd_open(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 await remember_telegram_photo(render_key, sent_message)
             return
         except BadRequest as exc:
+            if isinstance(image_payload, str):
+                await delete_telegram_file_id(render_key)
             logger.warning("Pack photo was rejected; using text request=%s: %s", request_id, exc)
         except (TimedOut, NetworkError) as exc:
             logger.error(

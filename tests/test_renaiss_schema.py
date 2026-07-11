@@ -92,6 +92,7 @@ async def test_schema_is_additive_and_excludes_trading_tables():
     assert "renaiss:starter:welcome:v1" in sql
     assert "create table if not exists renaiss_telegram_media_cache" in sql
     assert "telegram_file_id text not null" in sql
+    assert "primary key (bot_id, render_key)" in sql
     assert "drop table" not in sql
     assert "renaiss_user_cash" not in sql
     assert "renaiss_trade_log" not in sql
