@@ -350,7 +350,7 @@ def _price_summary_line(
         freshness = _freshness_text(price, now=now)
         suffix = f" · {freshness}" if freshness else ""
         return f"{icon('coin')} <b>{value}</b> {icon('check')} Renaiss FMV{suffix}"
-    return f"{icon('coin')} <b>{value}</b> · 🧪 unverified"
+    return f"{icon('coin')} <b>{value}</b>"
 
 
 def _guess_keyboard(active: ActiveSpawn) -> InlineKeyboardMarkup | None:

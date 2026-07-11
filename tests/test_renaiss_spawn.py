@@ -614,7 +614,7 @@ def test_unverified_reveal_is_labeled_collection_only():
     line = _price_summary_line(card, price)
 
     from renaiss_bot.services.emoji import icon as _icon
-    assert line == f"{_icon('coin')} <b>$60</b> · 🧪 unverified"
+    assert line == f"{_icon('coin')} <b>$60</b>"
 
 
 def test_unpriced_spawn_does_not_prompt_for_missing_buttons():

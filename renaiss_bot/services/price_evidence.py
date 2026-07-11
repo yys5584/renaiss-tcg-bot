@@ -51,6 +51,16 @@ def catalog_provenance_issue(card: CardIdentity) -> str | None:
     return "exact catalog evidence lacks verified provenance"
 
 
+def _absolute_asset_url(raw: object) -> str | None:
+    """카탈로그의 상대 href(/card/...)를 공개 카드 페이지 절대 URL로 만든다."""
+    value = str(raw or "").strip()
+    if not value:
+        return None
+    if value.startswith("/"):
+        return f"https://index.renaissos.com{value}"
+    return value
+
+
 def catalog_reference_price(
     card: CardIdentity,
     *,
@@ -87,7 +97,7 @@ def catalog_reference_price(
         "observation_count": _optional_int(metadata.get("price_observation_count")),
         "valuation_method": str(metadata.get("price_valuation_method") or "") or None,
         "fmv_usd": market_usd if market_usd is not None else card.market_price_usd,
-        "asset_url": str(metadata.get("price_asset_url") or "") or None,
+        "asset_url": _absolute_asset_url(metadata.get("price_asset_url")),
         "referral_url": str(metadata.get("price_referral_url") or "") or None,
         "image_url": card.image_url,
         "source_identity_key": str(metadata.get("price_source_identity_key") or "") or None,
