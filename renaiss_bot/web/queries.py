@@ -173,10 +173,25 @@ def _catalog_cte() -> str:
                 COALESCE(owned.quantity, 0)::int AS quantity,
                 owned.updated_at AS obtained_at
             FROM master m
-            LEFT JOIN public.renaiss_user_cards owned
-              ON owned.user_id = $1
-             AND owned.category = m.category
-             AND owned.local_card_id::text = m.local_card_id
+            LEFT JOIN LATERAL (
+                SELECT
+                    COALESCE(SUM(uc.quantity), 0)::int AS quantity,
+                    MAX(uc.updated_at) AS updated_at
+                FROM public.renaiss_user_cards uc
+                WHERE uc.user_id = $1
+                  AND uc.category = m.category
+                  AND uc.is_tutorial IS NOT TRUE
+                  AND (
+                      uc.local_card_id::text = m.local_card_id
+                      OR (
+                          LOWER(BTRIM(uc.card_name)) = LOWER(BTRIM(m.card_name))
+                          AND LOWER(BTRIM(COALESCE(uc.set_code, ''))) =
+                              LOWER(BTRIM(COALESCE(m.set_code, '')))
+                          AND LOWER(BTRIM(COALESCE(uc.collector_number, ''))) =
+                              LOWER(BTRIM(COALESCE(m.collector_number, '')))
+                      )
+                  )
+            ) owned ON TRUE
 
             UNION ALL
 
@@ -202,6 +217,13 @@ def _catalog_cte() -> str:
               AND NOT EXISTS (
                   SELECT 1 FROM master m
                   WHERE m.local_card_id = uc.local_card_id::text
+                     OR (
+                          LOWER(BTRIM(m.card_name)) = LOWER(BTRIM(uc.card_name))
+                          AND LOWER(BTRIM(COALESCE(m.set_code, ''))) =
+                              LOWER(BTRIM(COALESCE(uc.set_code, '')))
+                          AND LOWER(BTRIM(COALESCE(m.collector_number, ''))) =
+                              LOWER(BTRIM(COALESCE(uc.collector_number, '')))
+                     )
               )
         )
         """

@@ -42,6 +42,16 @@ def _b64(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
 
 
+def test_collection_cte_maps_legacy_owned_ids_by_structural_identity():
+    sql = queries._catalog_cte()
+
+    assert "uc.local_card_id::text = m.local_card_id" in sql
+    assert "LOWER(BTRIM(uc.card_name)) = LOWER(BTRIM(m.card_name))" in sql
+    assert "LOWER(BTRIM(COALESCE(uc.set_code, '')))" in sql
+    assert "LOWER(BTRIM(COALESCE(uc.collector_number, '')))" in sql
+    assert "COALESCE(SUM(uc.quantity), 0)::int AS quantity" in sql
+
+
 @pytest.fixture
 def web_secret(monkeypatch):
     monkeypatch.setenv("RENAISS_WEB_SESSION_SECRET", "s" * 48)

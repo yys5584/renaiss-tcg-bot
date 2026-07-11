@@ -1,0 +1,282 @@
+[
+  {
+    "local_card_id": "sv1-109-annihilape",
+    "card_name": "Annihilape",
+    "grade": "R",
+    "set_code": "sv1",
+    "set_name": "Scarlet & Violet",
+    "collector_number": "sv1-109",
+    "language": "English",
+    "image_url": "https://images.pokemontcg.io/sv1/109_hires.png"
+  },
+  {
+    "local_card_id": "sv1-23-arboliva",
+    "card_name": "Arboliva",
+    "grade": "R",
+    "set_code": "sv1",
+    "set_name": "Scarlet & Violet",
+    "collector_number": "sv1-23",
+    "language": "English",
+    "image_url": "https://images.pokemontcg.io/sv1/23_hires.png"
+  },
+  {
+    "local_card_id": "svp-136-bouffalant",
+    "card_name": "Bouffalant",
+    "grade": "R",
+    "set_code": "svp",
+    "set_name": "Scarlet & Violet Black Star Promos",
+    "collector_number": "svp-136",
+    "language": "English",
+    "image_url": "https://images.pokemontcg.io/svp/136_hires.png"
+  },
+  {
+    "local_card_id": "sv4-29-chi-yu",
+    "card_name": "Chi-Yu",
+    "grade": "R",
+    "set_code": "sv4",
+    "set_name": "Paradox Rift",
+    "collector_number": "sv4-29",
+    "language": "English",
+    "image_url": "https://images.pokemontcg.io/sv4/29_hires.png"
+  },
+  {
+    "local_card_id": "svp-95-cleffa",
+    "card_name": "Cleffa",
+    "grade": "R",
+    "set_code": "svp",
+    "set_name": "Scarlet & Violet Black Star Promos",
+    "collector_number": "svp-95",
+    "language": "English",
+    "image_url": "https://images.pokemontcg.io/svp/95_hires.png"
+  },
+  {
+    "local_card_id": "sv7-160-dachsbun-ex",
+    "card_name": "Dachsbun ex",
+    "grade": "SR",
+    "set_code": "sv7",
+    "set_name": "Stellar Crown",
+    "collector_number": "sv7-160",
+    "language": "English",
+    "image_url": "https://images.pokemontcg.io/sv7/160_hires.png"
+  },
+  {
+    "local_card_id": "sv3-136-darkrai",
+    "card_name": "Darkrai",
+    "grade": "R",
+    "set_code": "sv3",
+    "set_name": "Obsidian Flames",
+    "collector_number": "sv3-136",
+    "language": "English",
+    "image_url": "https://images.pokemontcg.io/sv3/136_hires.png"
+  },
+  {
+    "local_card_id": "sv4pt5-103-dolliv",
+    "card_name": "Dolliv",
+    "grade": "AR",
+    "set_code": "sv4pt5",
+    "set_name": "Paldean Fates",
+    "collector_number": "sv4pt5-103",
+    "language": "English",
+    "image_url": "https://images.pokemontcg.io/sv4pt5/103_hires.png"
+  },
+  {
+    "local_card_id": "svp-97-flutter-mane",
+    "card_name": "Flutter Mane",
+    "grade": "R",
+    "set_code": "svp",
+    "set_name": "Scarlet & Violet Black Star Promos",
+    "collector_number": "svp-97",
+    "language": "English",
+    "image_url": "https://images.pokemontcg.io/svp/97_hires.png"
+  },
+  {
+    "local_card_id": "sv7-71-iron-boulder",
+    "card_name": "Iron Boulder",
+    "grade": "R",
+    "set_code": "sv7",
+    "set_name": "Stellar Crown",
+    "collector_number": "sv7-71",
+    "language": "English",
+    "image_url": "https://images.pokemontcg.io/sv7/71_hires.png"
+  },
+  {
+    "local_card_id": "sv8-110-landorus",
+    "card_name": "Landorus",
+    "grade": "R",
+    "set_code": "sv8",
+    "set_name": "Surging Sparks",
+    "collector_number": "sv8-110",
+    "language": "English",
+    "image_url": "https://images.pokemontcg.io/sv8/110_hires.png"
+  },
+  {
+    "local_card_id": "svp-206-marnies-morpeko",
+    "card_name": "Marnie's Morpeko",
+    "grade": "R",
+    "set_code": "svp",
+    "set_name": "Scarlet & Violet Black Star Promos",
+    "collector_number": "svp-206",
+    "language": "English",
+    "image_url": "https://images.pokemontcg.io/svp/206_hires.png"
+  },
+  {
+    "local_card_id": "sv2-226-maushold",
+    "card_name": "Maushold",
+    "grade": "AR",
+    "set_code": "sv2",
+    "set_name": "Paldea Evolved",
+    "collector_number": "sv2-226",
+    "language": "English",
+    "image_url": "https://images.pokemontcg.io/sv2/226_hires.png"
+  },
+  {
+    "local_card_id": "sv5-182-minccino",
+    "card_name": "Minccino",
+    "grade": "AR",
+    "set_code": "sv5",
+    "set_name": "Temporal Forces",
+    "collector_number": "sv5-182",
+    "language": "English",
+    "image_url": "https://images.pokemontcg.io/sv5/182_hires.png"
+  },
+  {
+    "local_card_id": "sv4-121-morpeko",
+    "card_name": "Morpeko",
+    "grade": "R",
+    "set_code": "sv4",
+    "set_name": "Paradox Rift",
+    "collector_number": "sv4-121",
+    "language": "English",
+    "image_url": "https://images.pokemontcg.io/sv4/121_hires.png"
+  },
+  {
+    "local_card_id": "sv2-33-oricorio",
+    "card_name": "Oricorio",
+    "grade": "R",
+    "set_code": "sv2",
+    "set_name": "Paldea Evolved",
+    "collector_number": "sv2-33",
+    "language": "English",
+    "image_url": "https://images.pokemontcg.io/sv2/33_hires.png"
+  },
+  {
+    "local_card_id": "sv4-40-palkia",
+    "card_name": "Palkia",
+    "grade": "R",
+    "set_code": "sv4",
+    "set_name": "Paradox Rift",
+    "collector_number": "sv4-40",
+    "language": "English",
+    "image_url": "https://images.pokemontcg.io/sv4/40_hires.png"
+  },
+  {
+    "local_card_id": "sv6pt5-15-revavroom-ex",
+    "card_name": "Revavroom ex",
+    "grade": "RR",
+    "set_code": "sv6pt5",
+    "set_name": "Shrouded Fable",
+    "collector_number": "sv6pt5-15",
+    "language": "English",
+    "image_url": "https://images.pokemontcg.io/sv6pt5/15_hires.png"
+  },
+  {
+    "local_card_id": "rsv10pt5-23-samurott",
+    "card_name": "Samurott",
+    "grade": "R",
+    "set_code": "rsv10pt5",
+    "set_name": "White Flare",
+    "collector_number": "rsv10pt5-23",
+    "language": "English",
+    "image_url": "https://images.pokemontcg.io/rsv10pt5/23_hires.png"
+  },
+  {
+    "local_card_id": "svp-186-scraggy",
+    "card_name": "Scraggy",
+    "grade": "R",
+    "set_code": "svp",
+    "set_name": "Scarlet & Violet Black Star Promos",
+    "collector_number": "svp-186",
+    "language": "English",
+    "image_url": "https://images.pokemontcg.io/svp/186_hires.png"
+  },
+  {
+    "local_card_id": "svp-81-skeledirge-ex",
+    "card_name": "Skeledirge ex",
+    "grade": "R",
+    "set_code": "svp",
+    "set_name": "Scarlet & Violet Black Star Promos",
+    "collector_number": "svp-81",
+    "language": "English",
+    "image_url": "https://images.pokemontcg.io/svp/81_hires.png"
+  },
+  {
+    "local_card_id": "sv10-145-stevens-metagross-ex",
+    "card_name": "Steven's Metagross ex",
+    "grade": "RR",
+    "set_code": "sv10",
+    "set_name": "Destined Rivals",
+    "collector_number": "sv10-145",
+    "language": "English",
+    "image_url": "https://images.pokemontcg.io/sv10/145_hires.png"
+  },
+  {
+    "local_card_id": "svp-172-sylveon",
+    "card_name": "Sylveon",
+    "grade": "R",
+    "set_code": "svp",
+    "set_name": "Scarlet & Violet Black Star Promos",
+    "collector_number": "svp-172",
+    "language": "English",
+    "image_url": "https://images.pokemontcg.io/svp/172_hires.png"
+  },
+  {
+    "local_card_id": "sv8pt5-92-terapagos-ex",
+    "card_name": "Terapagos ex",
+    "grade": "RR",
+    "set_code": "sv8pt5",
+    "set_name": "Prismatic Evolutions",
+    "collector_number": "sv8pt5-92",
+    "language": "English",
+    "image_url": "https://images.pokemontcg.io/sv8pt5/92_hires.png"
+  },
+  {
+    "local_card_id": "sv2-135-tyranitar",
+    "card_name": "Tyranitar",
+    "grade": "R",
+    "set_code": "sv2",
+    "set_name": "Paldea Evolved",
+    "collector_number": "sv2-135",
+    "language": "English",
+    "image_url": "https://images.pokemontcg.io/sv2/135_hires.png"
+  },
+  {
+    "local_card_id": "rsv10pt5-172-victini",
+    "card_name": "Victini",
+    "grade": "R",
+    "set_code": "rsv10pt5",
+    "set_name": "White Flare",
+    "collector_number": "rsv10pt5-172",
+    "language": "English",
+    "image_url": "https://images.pokemontcg.io/rsv10pt5/172_hires.png"
+  },
+  {
+    "local_card_id": "svp-179-xerneas-ex",
+    "card_name": "Xerneas ex",
+    "grade": "R",
+    "set_code": "svp",
+    "set_name": "Scarlet & Violet Black Star Promos",
+    "collector_number": "svp-179",
+    "language": "English",
+    "image_url": "https://images.pokemontcg.io/svp/179_hires.png"
+  },
+  {
+    "local_card_id": "svp-198-zacian-ex",
+    "card_name": "Zacian ex",
+    "grade": "R",
+    "set_code": "svp",
+    "set_name": "Scarlet & Violet Black Star Promos",
+    "collector_number": "svp-198",
+    "language": "English",
+    "image_url": "https://images.pokemontcg.io/svp/198_hires.png"
+  }
+]
