@@ -45,6 +45,22 @@ def _card_value(card: CardIdentity) -> float:
         return 0.0
 
 
+# 가격 기반 수집 등급. 스폰 밴드 기준선(rare=$100, grail=$500)과 정렬된다.
+GRADE_MIN_USD = (("UR", 500.0), ("SAR", 300.0), ("SR", 100.0), ("R", 30.0))
+
+
+def grade_for_price(value: float | None) -> str:
+    """Map a market price to the collection grade tier used by the renderer."""
+    try:
+        price = float(value or 0)
+    except (TypeError, ValueError):
+        price = 0.0
+    for grade, minimum in GRADE_MIN_USD:
+        if price >= minimum:
+            return grade
+    return "C"
+
+
 def price_band(value: float) -> str:
     """Classify a displayed value with the same thresholds used for spawn selection."""
     if value >= BAND_MIN_USD["grail"]:

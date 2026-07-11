@@ -24,6 +24,7 @@ from dotenv import dotenv_values
 from renaiss_bot.database.connection import close_db, get_db
 from renaiss_bot.database.schema import create_tables
 from renaiss_bot.services.client import _api_base, _headers
+from renaiss_bot.services.spawn import grade_for_price
 from renaiss_bot.tools.prepare_database import database_mutation_target_issue
 
 SITEMAP_URL = "https://index.renaissos.com/sitemap.xml"
@@ -102,18 +103,19 @@ def candidate_row(row: dict[str, Any], *, synced_at: datetime) -> dict[str, Any]
             "href": href,
         },
     }
+    market_price_usd = round(float(row["priceUsdCents"]) / 100, 2)
     return {
         "local_card_id": local_card_id,
         "category": category,
         "card_name": str(row.get("name") or "Unknown Card"),
-        "grade": "R",
+        "grade": grade_for_price(market_price_usd),
         "set_code": str(row.get("setCode") or ""),
         "set_name": str(row.get("setName") or ""),
         "collector_number": str(row.get("cardNumber") or ""),
         "rarity": variation or "PSA 10",
         "language": str(row.get("language") or "English"),
         "image_url": str(row.get("imageUrl") or ""),
-        "market_price_usd": round(float(row["priceUsdCents"]) / 100, 2),
+        "market_price_usd": market_price_usd,
         "metadata": metadata,
     }
 
@@ -204,6 +206,7 @@ async def stage_candidates(rows: list[dict[str, Any]]) -> int:
             ON CONFLICT (local_card_id) DO UPDATE SET
                 category = EXCLUDED.category,
                 card_name = EXCLUDED.card_name,
+                grade = EXCLUDED.grade,
                 set_code = EXCLUDED.set_code,
                 set_name = EXCLUDED.set_name,
                 collector_number = EXCLUDED.collector_number,

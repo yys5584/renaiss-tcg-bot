@@ -45,8 +45,23 @@ def test_candidate_row_stages_one_piece_inactive_ready_payload():
     candidate = candidate_row(row, synced_at=datetime(2026, 7, 11, tzinfo=timezone.utc))
     assert candidate["category"] == "one_piece_tcg"
     assert candidate["market_price_usd"] == 125.0
+    assert candidate["grade"] == "SR"  # $125 falls in the $100-299 tier
     assert candidate["metadata"]["market_grade"] == "PSA 10 Gem Mint"
     assert candidate["metadata"]["price_status"] == "candidate"
+
+
+def test_grade_for_price_tiers():
+    from renaiss_bot.services.spawn import grade_for_price
+
+    assert grade_for_price(12000) == "UR"
+    assert grade_for_price(500) == "UR"
+    assert grade_for_price(499.99) == "SAR"
+    assert grade_for_price(300) == "SAR"
+    assert grade_for_price(100) == "SR"
+    assert grade_for_price(99.99) == "R"
+    assert grade_for_price(30) == "R"
+    assert grade_for_price(15.72) == "C"
+    assert grade_for_price(None) == "C"
 
 
 def test_staging_refused_without_matching_fingerprint(monkeypatch):

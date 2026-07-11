@@ -250,7 +250,10 @@ def _grader_kind(card: CardIdentity, price: RenaissPrice) -> str:
             return "cgc-pristine"
         return "cgc"
     # 실물 그레이딩이 없으면 뽑은 카드의 실제 TCG 등급(C~MUR)으로 화려함을 결정한다.
-    grade = normalize_grade(card.rarity or card.grade)
+    # rarity는 자유 텍스트("Art Rare" 등)일 수 있으므로, 티어로 해석되는 값만 쓰고
+    # 아니면 가격 기반 grade 필드로 폴백한다.
+    raw_rarity = str(card.rarity or "").strip().upper()
+    grade = raw_rarity if raw_rarity in _TCG_GRADE_KIND else normalize_grade(card.grade)
     return _TCG_GRADE_KIND.get(grade, "tcg-common")
 
 
