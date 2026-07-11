@@ -143,7 +143,7 @@ async def test_concurrent_flex_commands_reserve_once_before_public_send(monkeypa
         SimpleNamespace(
             effective_message=message,
             effective_user=SimpleNamespace(id=10, full_name="Rookie"),
-            effective_chat=SimpleNamespace(id=-1001),
+            effective_chat=SimpleNamespace(id=-1001, type="supergroup"),
         )
         for message in messages
     ]
@@ -186,7 +186,7 @@ async def test_cancelled_flex_render_releases_unsent_reservation(monkeypatch):
     update = SimpleNamespace(
         effective_message=SimpleNamespace(reply_text=AsyncMock()),
         effective_user=SimpleNamespace(id=10, full_name="Rookie"),
-        effective_chat=SimpleNamespace(id=-1001),
+        effective_chat=SimpleNamespace(id=-1001, type="supergroup"),
     )
 
     with pytest.raises(asyncio.CancelledError):
@@ -232,7 +232,7 @@ async def test_flex_room_noise_gate_stops_before_render(
     update = SimpleNamespace(
         effective_message=message,
         effective_user=SimpleNamespace(id=10, full_name="Rookie"),
-        effective_chat=SimpleNamespace(id=-1001),
+        effective_chat=SimpleNamespace(id=-1001, type="supergroup"),
     )
 
     private_send = AsyncMock()
@@ -247,10 +247,9 @@ async def test_flex_room_noise_gate_stops_before_render(
     assert expected in private_send.await_args.kwargs["text"]
 
 
-async def test_flex_is_rejected_outside_official_room_before_database(monkeypatch):
+async def test_flex_is_rejected_in_private_chat_before_database(monkeypatch):
     lookup = AsyncMock()
     monkeypatch.setattr("renaiss_bot.handlers.flex.get_flex_card", lookup)
-    monkeypatch.setattr("renaiss_bot.handlers.flex.official_chat_id", lambda: -1001)
 
     message = SimpleNamespace(reply_text=AsyncMock())
     update = SimpleNamespace(
@@ -262,7 +261,26 @@ async def test_flex_is_rejected_outside_official_room_before_database(monkeypatc
     await cmd_flex(update, SimpleNamespace())
 
     lookup.assert_not_awaited()
-    assert "community collaboration game room" in message.reply_text.await_args.args[0]
+    assert "group chats" in message.reply_text.await_args.args[0]
+
+
+async def test_flex_runs_in_any_group_room(monkeypatch):
+    """공식방이 아니어도 그룹이면 방별 예산으로 동작한다."""
+    lookup = AsyncMock(return_value=None)  # 카드 없음 → 안내 후 종료 (DB 게이트 통과 증명)
+    monkeypatch.setattr("renaiss_bot.handlers.flex.get_flex_card", lookup)
+    monkeypatch.setattr("renaiss_bot.handlers.flex.official_chat_id", lambda: -1001)
+
+    message = SimpleNamespace(reply_text=AsyncMock())
+    update = SimpleNamespace(
+        effective_message=message,
+        effective_user=SimpleNamespace(id=10),
+        effective_chat=SimpleNamespace(id=-2002, type="supergroup"),
+    )
+
+    await cmd_flex(update, SimpleNamespace())
+
+    lookup.assert_awaited_once()
+    assert "no cards yet" in message.reply_text.await_args.args[0]
 
 
 async def test_props_database_failure_is_not_reported_as_duplicate(monkeypatch):

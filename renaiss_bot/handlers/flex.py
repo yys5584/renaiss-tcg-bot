@@ -98,9 +98,12 @@ async def cmd_flex(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id if update.effective_chat else user_id
 
-    if official_chat_id() is None or chat_id != official_chat_id():
+    chat_type = getattr(update.effective_chat, "type", "") if update.effective_chat else ""
+    if chat_type not in {"group", "supergroup"}:
+        # 방별 일일 예산(renaiss_flex_daily_slots.chat_id)이 분리되어 있어
+        # 봇이 있는 어느 그룹에서든 안전하게 동작한다. DM만 막는다.
         await update.effective_message.reply_text(
-            "Flex is available only in the community collaboration game room."
+            "Flex works in group chats — use it in a room where the bot is a member."
         )
         return
 
