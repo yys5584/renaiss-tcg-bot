@@ -367,11 +367,8 @@ REQUIRED_CONSTRAINTS = {
         "p",
         "primarykey(api_name)",
     ),
-    "flex daily primary key": (
-        "renaiss_flex_daily_slots",
-        "p",
-        "primarykey(user_id,flex_date)",
-    ),
+    # The (user_id, flex_date) primary key was dropped when /flex moved from a
+    # daily cap to a per-user cooldown; the reservation token stays unique.
     "flex reservation token": (
         "renaiss_flex_daily_slots",
         "u",
