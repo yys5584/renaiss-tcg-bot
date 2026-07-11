@@ -30,6 +30,7 @@ from renaiss_bot.database.queries import (
 )
 from renaiss_bot.renderers.overlay import render_overlay_card
 from renaiss_bot.services.models import CardIdentity, RenaissPrice
+from renaiss_bot.services.features import pack_economy_enabled
 from renaiss_bot.services.pack import open_pack
 from renaiss_bot.services.quiz import (
     build_price_options,
@@ -38,6 +39,7 @@ from renaiss_bot.services.quiz import (
     format_price_option,
     pick_quiz_subject,
 )
+from renaiss_bot.services.tracking import build_tracked_url
 
 logger = logging.getLogger(__name__)
 
@@ -75,13 +77,18 @@ def _options_keyboard(round_id: int, options: list[float]) -> InlineKeyboardMark
 
 
 def _quiz_text(card_name: str, close_seconds: int, round_number: int) -> str:
+    reward_text = ""
+    if pack_economy_enabled():
+        reward_text = (
+            "🎁 Every correct answer wins a free pack.\n"
+            "💎 One lucky winner gets a <b>Premium Pack</b>.\n\n"
+        )
     return (
         f"🎯 <b>Daily Price Quiz #{round_number}</b>\n"
         "------------\n"
         f"Guess today's market value of <b>{escape(card_name)}</b>!\n\n"
         f"⏳ Answers lock in <b>{close_seconds}s</b>.\n"
-        "🎁 Every correct answer wins a free pack.\n"
-        "💎 One lucky winner gets a <b>Premium Pack</b>.\n\n"
+        f"{reward_text}"
         "Prices come from the Renaiss Index API (beta reference data)."
     )
 
@@ -227,7 +234,7 @@ async def close_quiz_job(context: ContextTypes.DEFAULT_TYPE) -> None:
 
     jackpot_result = None
     jackpot_winner = None
-    if winners:
+    if winners and pack_economy_enabled():
         # 정답자별 보상 (프리팩 + RP) 은 서로 독립 → 전원 병렬 지급
         await asyncio.gather(
             *(
@@ -272,8 +279,11 @@ async def close_quiz_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         if len(winners) > 12:
             names += f" +{len(winners) - 12}"
         reveal_lines.append(f"✅ Correct ({len(winners)}/{len(answers)}): {names}")
-        reveal_lines.append(f"🎁 Each winner received a free pack + RP +{RP_CORRECT_ANSWER}.")
-        if jackpot_winner is not None:
+        if pack_economy_enabled():
+            reveal_lines.append(f"🎁 Each winner received a free pack + RP +{RP_CORRECT_ANSWER}.")
+        else:
+            reveal_lines.append("🧠 Correct calls are recorded as market insight — no currency reward.")
+        if jackpot_winner is not None and pack_economy_enabled():
             jackpot_name = escape(str(jackpot_winner.get("display_name") or jackpot_winner["user_id"]))
             reveal_lines.append(f"💎 Premium Pack jackpot: <b>{jackpot_name}</b>!")
 
@@ -293,7 +303,17 @@ async def close_quiz_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     keyboard = None
     referral_url = round_data.get("referral_url")
     if referral_url:
-        keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("View on Renaiss", url=referral_url)]])
+        tracked_url = await build_tracked_url(
+            referral_url,
+            user_id=None,
+            chat_id=chat_id,
+            local_card_id=round_data.get("local_card_id"),
+            source="telegram_quiz_reveal",
+        )
+        if tracked_url:
+            keyboard = InlineKeyboardMarkup(
+                [[InlineKeyboardButton("View on Renaiss", url=tracked_url)]]
+            )
 
     try:
         if reveal_image:

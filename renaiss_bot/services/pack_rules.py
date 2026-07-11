@@ -124,7 +124,7 @@ def plan_pack_open(
 
 def normalize_pack_type(value: str | None) -> str:
     raw = (value or "free").strip().lower()
-    if raw in {"premium", "bp", "paid", "프리미엄"}:
+    if raw in {"premium", "bp", "paid"}:
         return "premium"
     return "free"
 

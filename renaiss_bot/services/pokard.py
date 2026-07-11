@@ -61,7 +61,12 @@ async def list_cards(
     url = f"{base}/cards"
     timeout = aiohttp.ClientTimeout(total=timeout_seconds)
     try:
-        async with session.get(url, params=params, timeout=timeout) as resp:
+        async with session.get(
+            url,
+            params=params,
+            timeout=timeout,
+            allow_redirects=False,
+        ) as resp:
             if resp.status == 401:
                 raise PokardError("UNAUTHORIZED", "POKARD_API_KEY 미설정/무효", 401)
             if resp.status == 403:

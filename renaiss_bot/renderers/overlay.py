@@ -2,22 +2,156 @@
 
 from __future__ import annotations
 
+import asyncio
+import base64
+import hashlib
+import json
+import logging
+import os
 import re
+from collections import OrderedDict
 from html import escape
 from pathlib import Path
 from typing import Any
 
-from renaiss_bot.renderers.playwright_render import (
-    render_html_to_png,
-    resolve_image_to_data_uri,
-)
+from renaiss_bot.renderers.pillow_overlay import TEMPLATE_VERSION, render_fixed_overlay
+from renaiss_bot.renderers.playwright_render import render_html_to_png, resolve_image_to_data_uri
 from renaiss_bot.services.models import CardIdentity, RenaissPrice
+from renaiss_bot.services.market import market_card_eligible
 from renaiss_bot.services.pack_rules import normalize_grade
 
 
 _ROOT = Path(__file__).resolve().parents[1]
 _LOGO_PATH = _ROOT / "assets" / "renaiss_logo.svg"
 _LOGO_SVG_CACHE: str | None = None
+logger = logging.getLogger(__name__)
+_overlay_semaphore: asyncio.Semaphore | None = None
+_overlay_semaphore_loop = None
+_overlay_semaphore_limit = 0
+_IMAGE_CACHE: OrderedDict[str, str | None] = OrderedDict()
+_IMAGE_TASKS: dict[str, asyncio.Task[str | None]] = {}
+_FINAL_CACHE: OrderedDict[str, bytes] = OrderedDict()
+
+
+def _render_pool_size() -> int:
+    try:
+        return min(4, max(1, int(os.getenv("RENAISS_RENDER_POOL_SIZE", "2"))))
+    except ValueError:
+        return 2
+
+
+def _render_total_timeout_seconds() -> float:
+    try:
+        value = float(os.getenv("RENAISS_RENDER_TOTAL_TIMEOUT_SECONDS", "8"))
+    except (TypeError, ValueError):
+        return 8.0
+    return min(30.0, max(3.0, value))
+
+
+def _overlay_gate() -> asyncio.Semaphore:
+    global _overlay_semaphore
+    global _overlay_semaphore_loop
+    global _overlay_semaphore_limit
+    loop = asyncio.get_running_loop()
+    limit = _render_pool_size()
+    if (
+        _overlay_semaphore is None
+        or _overlay_semaphore_loop is not loop
+        or _overlay_semaphore_limit != limit
+    ):
+        _overlay_semaphore = asyncio.Semaphore(limit)
+        _overlay_semaphore_loop = loop
+        _overlay_semaphore_limit = limit
+    return _overlay_semaphore
+
+
+def _cache_limit(name: str, default: int) -> int:
+    try:
+        return min(128, max(4, int(os.getenv(name, str(default)))))
+    except ValueError:
+        return default
+
+
+def _remember(cache: OrderedDict, key: str, value, *, limit: int) -> None:
+    cache[key] = value
+    cache.move_to_end(key)
+    while len(cache) > limit:
+        cache.popitem(last=False)
+
+
+def _image_source_key(url: str) -> str:
+    security_context = "|".join(
+        [
+            os.getenv("RENAISS_IMAGE_ALLOWED_HOSTS", ""),
+            os.getenv("RENAISS_IMAGE_MAX_BYTES", ""),
+            url,
+        ]
+    )
+    return hashlib.sha256(security_context.encode("utf-8")).hexdigest()
+
+
+async def _cached_image_data_uri(url: str | None) -> str | None:
+    if not url:
+        return None
+    key = _image_source_key(url)
+    if key in _IMAGE_CACHE:
+        value = _IMAGE_CACHE.pop(key)
+        _IMAGE_CACHE[key] = value
+        return value
+    task = _IMAGE_TASKS.get(key)
+    if task is None:
+        task = asyncio.create_task(resolve_image_to_data_uri(url))
+        _IMAGE_TASKS[key] = task
+    try:
+        value = await asyncio.shield(task)
+    finally:
+        if task.done():
+            _IMAGE_TASKS.pop(key, None)
+    _remember(
+        _IMAGE_CACHE,
+        key,
+        value,
+        limit=_cache_limit("RENAISS_RENDER_IMAGE_CACHE_SIZE", 32),
+    )
+    return value
+
+
+def _data_uri_bytes(value: str | None) -> bytes | None:
+    if not value:
+        return None
+    _, separator, payload = value.partition(",")
+    if not separator:
+        return None
+    try:
+        return base64.b64decode(payload, validate=True)
+    except (ValueError, TypeError):
+        return None
+
+
+def overlay_cache_key(card: CardIdentity, price: RenaissPrice) -> str:
+    """Stable key shared by the PNG cache and Telegram file-id cache."""
+    payload = {
+        "template": TEMPLATE_VERSION,
+        "image_url": price.image_url or card.image_url,
+        "local_card_id": card.local_card_id,
+        "category": card.category,
+        "name": card.card_name,
+        "set_code": card.set_code,
+        "collector_number": card.collector_number,
+        "grade": _grade_text(card, price),
+        "price": _price_text(card, price),
+        "kind": _grader_kind(card, price),
+    }
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def clear_overlay_caches() -> None:
+    _IMAGE_CACHE.clear()
+    _FINAL_CACHE.clear()
+    for task in _IMAGE_TASKS.values():
+        task.cancel()
+    _IMAGE_TASKS.clear()
 
 
 def _card_payload(card: CardIdentity, price: RenaissPrice) -> dict[str, Any]:
@@ -63,9 +197,11 @@ def _logo_svg() -> str:
     return svg
 
 
-def _price_text(price: RenaissPrice) -> str:
-    if price.fmv_usd is None:
-        return "CHECK"
+def _price_text(card: CardIdentity, price: RenaissPrice) -> str:
+    # A branded image is stronger than a caption disclaimer. Dollar headlines
+    # require the same exact/fresh/source evidence used by scored features.
+    if not market_card_eligible(card, price):
+        return "COLLECTION"
     if price.fmv_usd >= 1_000_000:
         return f"${price.fmv_usd / 1_000_000:.1f}M"
     if price.fmv_usd >= 1000:
@@ -225,7 +361,7 @@ def _style_vars(kind: str) -> dict[str, str]:
 
 def _render_html(card: dict[str, Any], price: RenaissPrice, original_card: CardIdentity) -> str:
     grade = escape(_grade_text(original_card, price))
-    price_label = escape(_price_text(price))
+    price_label = escape(_price_text(original_card, price))
     card_image = escape(str(card.get("image_url") or ""))
     kind = _grader_kind(original_card, price)
     style = _style_vars(kind)
@@ -382,7 +518,7 @@ body {{
 </html>"""
 
 
-async def render_overlay_card(card: CardIdentity, price: RenaissPrice) -> bytes | None:
+async def _render_overlay_card_legacy(card: CardIdentity, price: RenaissPrice) -> bytes | None:
     width, height = 1080, 1350
     render_card = _card_payload(card, price)
     # 원격 카드 이미지를 data URI 로 인라인해 CSP/networkidle 타임아웃을 회피.
@@ -394,5 +530,55 @@ async def render_overlay_card(card: CardIdentity, price: RenaissPrice) -> bytes 
         metadata["display_image_url"] = inlined
         metadata["image_url"] = inlined
         render_card["metadata"] = metadata
+    else:
+        # Never hand the rejected original URL to Chromium. The renderer's
+        # allowlist is authoritative for every image source, including file:
+        # URLs and oversized/invalid data URIs from imported catalog metadata.
+        render_card["image_url"] = ""
+        render_card["display_image_url"] = ""
+        metadata = render_card.get("metadata") or {}
+        metadata["display_image_url"] = ""
+        metadata["image_url"] = ""
+        render_card["metadata"] = metadata
     html = _render_html(render_card, price, card)
     return await render_html_to_png(html, width, height)
+
+
+async def _render_overlay_card(card: CardIdentity, price: RenaissPrice) -> bytes | None:
+    cache_key = overlay_cache_key(card, price)
+    cached = _FINAL_CACHE.get(cache_key)
+    if cached is not None:
+        _FINAL_CACHE.move_to_end(cache_key)
+        return cached
+
+    image_url = price.image_url or card.image_url
+    inlined = await _cached_image_data_uri(image_url)
+    kind = _grader_kind(card, price)
+    rendered = await asyncio.to_thread(
+        render_fixed_overlay,
+        card_image=_data_uri_bytes(inlined),
+        kind=kind,
+        style=_style_vars(kind),
+        grade_text=_grade_text(card, price),
+        price_text=_price_text(card, price),
+    )
+    _remember(
+        _FINAL_CACHE,
+        cache_key,
+        rendered,
+        limit=_cache_limit("RENAISS_RENDER_FINAL_CACHE_SIZE", 32),
+    )
+    return rendered
+
+
+async def render_overlay_card(card: CardIdentity, price: RenaissPrice) -> bytes | None:
+    """Bound image download and fixed-frame composition as one unit."""
+    async def run() -> bytes | None:
+        async with _overlay_gate():
+            return await _render_overlay_card(card, price)
+
+    try:
+        return await asyncio.wait_for(run(), timeout=_render_total_timeout_seconds())
+    except TimeoutError:
+        logger.warning("Renaiss overlay render timed out; using text fallback")
+        return None

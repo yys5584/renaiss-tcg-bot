@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 import random
 
 import pytest
 
+from renaiss_bot.handlers.quiz import _quiz_text
+from renaiss_bot.services.features import daily_quiz_enabled
 from renaiss_bot.services.grading import (
     compute_grading_premium,
     format_grading_premium,
@@ -17,16 +20,100 @@ from renaiss_bot.services.pack_rules import (
     PREMIUM_PACK_RP,
     plan_pack_open,
 )
-from renaiss_bot.services.models import GradeOffer
-from datetime import date
+from renaiss_bot.services.models import CardIdentity, GradeOffer, RenaissPrice, card_identity_key
+from datetime import date, datetime, timezone
 
 from renaiss_bot.services.quiz import (
     build_price_options,
     compute_streak,
     format_distribution,
     format_price_option,
+    pick_quiz_subject,
     round_price,
 )
+
+
+def test_quiz_prompt_has_no_pack_or_currency_reward_by_default(monkeypatch):
+    monkeypatch.delenv("RENAISS_PACK_ECONOMY_ENABLED", raising=False)
+    text = _quiz_text("Charizard", 120, 1)
+    assert "free pack" not in text
+    assert "Premium Pack" not in text
+    assert "RP" not in text
+
+
+def test_separate_daily_quiz_cannot_be_reenabled(monkeypatch):
+    monkeypatch.delenv("RENAISS_DAILY_QUIZ_ENABLED", raising=False)
+    assert not daily_quiz_enabled()
+    monkeypatch.setenv("RENAISS_DAILY_QUIZ_ENABLED", "1")
+    assert not daily_quiz_enabled()
+
+
+def test_retired_quiz_has_no_runtime_handler_or_scheduler():
+    root = Path(__file__).resolve().parents[1] / "renaiss_bot"
+    register_source = (root / "handlers" / "register.py").read_text(encoding="utf-8")
+    jobs_source = (root / "jobs.py").read_text(encoding="utf-8")
+    main_source = (root / "main.py").read_text(encoding="utf-8")
+
+    assert "renaiss:quiz:" not in register_source
+    assert "post_daily_quiz" not in jobs_source
+    assert "recover_open_quiz_rounds" not in jobs_source
+    assert "recover_open_quiz_rounds" not in main_source
+
+
+async def test_quiz_skips_catalog_fallback_price(monkeypatch):
+    card = CardIdentity(
+        category="pokemon_tcg",
+        card_name="Charizard",
+        set_code="BS",
+        collector_number="4/102",
+        market_price_usd=95,
+    )
+
+    async def pool(user_id, category):
+        return [card], "catalog"
+
+    async def catalog_price(candidate):
+        return RenaissPrice(
+            status="candidate",
+            source="catalog-fallback",
+            fmv_usd=95,
+        )
+
+    monkeypatch.setattr("renaiss_bot.services.quiz.load_card_pool", pool)
+    monkeypatch.setattr("renaiss_bot.services.quiz.fetch_price", catalog_price)
+    assert await pick_quiz_subject() is None
+
+
+async def test_quiz_accepts_only_verified_multi_source_price(monkeypatch):
+    card = CardIdentity(
+        category="pokemon_tcg",
+        card_name="Charizard",
+        set_code="BS",
+        collector_number="4/102",
+        market_price_usd=95,
+    )
+
+    async def pool(user_id, category):
+        return [card], "catalog"
+
+    async def exact_price(candidate):
+        return RenaissPrice(
+            status="exact",
+            source="renaiss-index-api",
+            fmv_usd=95,
+            confidence="high",
+            confidence_score=0.9,
+            source_count=3,
+            valuation_method="median",
+            asset_url="https://index.renaissos.com/cards/charizard",
+                price_updated_at=datetime.now(timezone.utc),
+                source_identity_key=card_identity_key(candidate),
+        )
+
+    monkeypatch.setattr("renaiss_bot.services.quiz.load_card_pool", pool)
+    monkeypatch.setattr("renaiss_bot.services.quiz.fetch_price", exact_price)
+    subject = await pick_quiz_subject()
+    assert subject is not None and subject.correct_price_usd == 95
 
 
 # ── 퀴즈 보기 생성 ─────────────────────────────────────────────

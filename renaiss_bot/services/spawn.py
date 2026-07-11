@@ -45,6 +45,15 @@ def _card_value(card: CardIdentity) -> float:
         return 0.0
 
 
+def price_band(value: float) -> str:
+    """Classify a displayed value with the same thresholds used for spawn selection."""
+    if value >= BAND_MIN_USD["grail"]:
+        return "grail"
+    if value >= BAND_MIN_USD["rare"]:
+        return "rare"
+    return "common"
+
+
 def cards_in_band(pool: list[CardIdentity], band: str) -> list[CardIdentity]:
     """해당 밴드 시세 구간의 카드. grail은 하한 이상, common은 rare 하한 미만."""
     lo = BAND_MIN_USD[band]
@@ -78,10 +87,5 @@ async def roll_spawn(category: str = "pokemon_tcg", *, rush: bool = False) -> Sp
         return None
     value = _card_value(card)
     # 실제 뽑힌 카드 시세로 밴드 재보정 (폴백으로 밴드가 어긋났을 수 있음)
-    if value >= BAND_MIN_USD["grail"]:
-        band = "grail"
-    elif value >= BAND_MIN_USD["rare"]:
-        band = "rare"
-    else:
-        band = "common"
+    band = price_band(value)
     return Spawn(card=card, band=band, market_usd=value)

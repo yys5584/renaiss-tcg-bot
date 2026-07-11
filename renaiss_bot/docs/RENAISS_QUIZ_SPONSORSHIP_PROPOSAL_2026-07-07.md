@@ -1,5 +1,9 @@
 # Daily Price Quiz — Sponsorship Proposal for Renaiss
 
+> **폐기된 역사 문서 · 2026-07-11 확정:** 별도 Daily Quiz, 현금 상금, 포트폴리오
+> 수익률, grading premium 퍼널은 현재 파일럿 범위가 아니다. 현재 제품 기준은
+> `AGENTS.md`, `GAME_PHILOSOPHY.md`, 최신 Collector Market Challenge 기획이다.
+
 **From:** moonyu (Renaiss Index API builder — Telegram TCG collector bot)
 **Date:** 2026-07-07
 

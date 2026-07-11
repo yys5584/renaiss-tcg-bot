@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 
 from renaiss_bot.services.card_pool import load_card_pool
+from renaiss_bot.services.market import market_card_eligible
 from renaiss_bot.services.models import CardIdentity, RenaissPrice
 from renaiss_bot.services.pricing import fetch_price
 
@@ -133,19 +134,11 @@ async def pick_quiz_subject(category: str = "pokemon_tcg") -> QuizSubject | None
         except Exception as exc:
             logger.debug("Quiz price fetch failed for %s: %s", card.card_name, exc)
             continue
-        if price.fmv_usd is not None and price.fmv_usd >= MIN_QUIZ_PRICE_USD and price.status in {"exact", "candidate"}:
+        if (
+            price.fmv_usd is not None
+            and price.fmv_usd >= MIN_QUIZ_PRICE_USD
+            and market_card_eligible(card, price)
+        ):
             return QuizSubject(card=card, price=price)
-
-    # Index 시세를 못 받으면 카탈로그 시세로 폴백 (그래도 출제는 매일 나가야 한다)
-    fallback_cards = [card for card in candidates if (card.market_price_usd or 0) >= MIN_QUIZ_PRICE_USD]
-    if fallback_cards:
-        card = rng.choice(fallback_cards)
-        price = RenaissPrice(
-            status="candidate",
-            source="catalog-fallback",
-            fmv_usd=float(card.market_price_usd or 0),
-            image_url=card.image_url,
-            market_status="catalog",
-        )
-        return QuizSubject(card=card, price=price)
+    logger.warning("Quiz skipped: no exact, fresh, multi-source Renaiss price passed the gate.")
     return None

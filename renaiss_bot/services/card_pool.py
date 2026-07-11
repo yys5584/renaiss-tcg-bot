@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import random
 from collections.abc import Iterable, Mapping
@@ -52,10 +53,11 @@ def _metadata(value: Any) -> dict[str, Any]:
 
 def _float_or_none(value: Any) -> float | None:
     try:
-        if value is None or value == "":
+        if value is None or value == "" or isinstance(value, bool):
             return None
-        return float(value)
-    except (TypeError, ValueError):
+        number = float(value)
+        return number if math.isfinite(number) and number > 0 else None
+    except (TypeError, ValueError, OverflowError):
         return None
 
 
@@ -170,12 +172,14 @@ def _sample_one_piece_cards() -> list[CardIdentity]:
 
 
 def sample_cards(category: str) -> list[CardIdentity]:
+    if category == "pokemon_tcg":
+        return _sample_pokemon_cards()
     if category == "one_piece_tcg":
         return _sample_one_piece_cards()
-    return _sample_pokemon_cards()
+    return []
 
 
-def _catalog_row_to_card(row: Mapping[str, Any]) -> CardIdentity:
+def catalog_row_to_card(row: Mapping[str, Any]) -> CardIdentity:
     meta = _metadata(row.get("metadata"))
     price = _float_or_none(row.get("market_price_usd")) or _extract_price_usd(meta)
     return CardIdentity(
@@ -247,7 +251,7 @@ async def _load_catalog_pool(user_id: int | None, category: str) -> tuple[list[C
         for row in rows:
             payload = dict(row)
             payload["already_owned"] = str(payload.get("local_card_id") or "") in owned_ids
-            cards.append(_catalog_row_to_card(payload))
+            cards.append(catalog_row_to_card(payload))
         if len(cards) >= CARDS_PER_PACK:
             return cards, "renaiss_catalog"
     except Exception as exc:
@@ -260,12 +264,12 @@ async def load_card_pool(user_id: int | None, category: str) -> tuple[list[CardI
     if catalog is not None:
         return catalog
 
-    if category != "pokemon_tcg":
-        return sample_cards(category), "sample"
     if os.getenv("RENAISS_SKIP_DB", "").strip().lower() in {"1", "true", "yes"}:
         return sample_cards(category), "sample"
     if not os.getenv("DATABASE_URL"):
         return sample_cards(category), "sample"
+    if category != "pokemon_tcg":
+        return [], "unavailable"
 
     try:
         pool = await get_db()
@@ -318,7 +322,7 @@ async def load_card_pool(user_id: int | None, category: str) -> tuple[list[CardI
     except Exception as exc:
         logger.info("Renaiss card pool DB load skipped: %s", exc)
 
-    return sample_cards(category), "sample"
+    return [], "unavailable"
 
 
 def _weighted_pick(candidates: Iterable[CardIdentity], used_ids: set[str], used_species: set[int]) -> CardIdentity | None:
@@ -331,11 +335,13 @@ def _weighted_pick(candidates: Iterable[CardIdentity], used_ids: set[str], used_
         if card.species_id is None or card.species_id not in used_species
     ]
     weighted = preferred or available
-    weights = [
-        (1.0 if not card.already_owned else 0.5)
-        * (1.0 + min(float(card.market_price_usd or 0), 500.0) / 2000.0)
-        for card in weighted
-    ]
+    weights = []
+    for card in weighted:
+        price = _float_or_none(card.market_price_usd) or 0.0
+        weight = (1.0 if not card.already_owned else 0.5) * (
+            1.0 + min(price, 500.0) / 2000.0
+        )
+        weights.append(max(0.01, weight))
     return random.choices(weighted, weights=weights, k=1)[0]
 
 
@@ -349,6 +355,9 @@ def pick_card_for_grade(pool: list[CardIdentity], grade: str, used_ids: set[str]
 
 
 def build_pack(pool: list[CardIdentity], category: str, pack_type: str) -> tuple[list[CardIdentity], str]:
+    if not pool:
+        raise ValueError(f"card pool is unavailable for {category}")
+    pack_pool = pool
     used_ids: set[str] = set()
     used_species: set[int] = set()
     cards: list[CardIdentity] = []
@@ -359,7 +368,11 @@ def build_pack(pool: list[CardIdentity], category: str, pack_type: str) -> tuple
         if grade == "LUCKY":
             grade = select_lucky_grade(pack_type)
             lucky_grade = grade
-        selected = pick_card_for_grade(pool, grade, used_ids, used_species)
+        selected = pick_card_for_grade(pack_pool, grade, used_ids, used_species)
+        if selected is None:
+            # A small pilot catalog may not contain ten unique cards. Fill the
+            # promised slot count with a repeat instead of silently shrinking a pack.
+            selected = _weighted_pick(pack_pool, set(), set())
         if selected is None:
             continue
         used_ids.add(selected.local_card_id)
@@ -368,8 +381,7 @@ def build_pack(pool: list[CardIdentity], category: str, pack_type: str) -> tuple
         cards.append(selected)
 
     if not cards:
-        fallback = sample_cards(category)
-        cards = fallback[:CARDS_PER_PACK]
+        cards = sample_cards(category)[:CARDS_PER_PACK]
     return cards, lucky_grade
 
 
