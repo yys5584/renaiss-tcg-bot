@@ -214,8 +214,8 @@ def _grade_text(card: CardIdentity, price: RenaissPrice) -> str:
     if not grade:
         return "RAW"
     upper = grade.upper()
-    for company in ("PSA", "BGS", "CGC"):
-        if company in upper:
+    for company in ("PSA", "BGS", "CGC", "SGC", "TAG", "ACE", "ARS"):
+        if re.search(rf"\b{company}\b", upper):
             match = re.search(r"\b(10|9\.5|9|8\.5|8|7\.5|7|6\.5|6|5\.5|5)\b", upper)
             return f"{company} {match.group(1)}" if match else company
     return upper
@@ -249,6 +249,15 @@ def _grader_kind(card: CardIdentity, price: RenaissPrice) -> str:
         if "PRISTINE" in raw or "PERFECT" in raw:
             return "cgc-pristine"
         return "cgc"
+    if re.search(r"\bSGC\b", raw):
+        return "sgc"
+    if re.search(r"\bTAG\b", raw):
+        return "tag"
+    if re.search(r"\b(ACE|ARS)\b", raw):
+        return "ace"
+    # 알려진 목록 밖의 그레이딩사도 TCG 프레임 대신 중립 슬랩으로 표시한다.
+    if str(price.grading_company or "").strip():
+        return "graded"
     # 실물 그레이딩이 없으면 뽑은 카드의 실제 TCG 등급(C~MUR)으로 화려함을 결정한다.
     # rarity는 자유 텍스트("Art Rare" 등)일 수 있으므로, 티어로 해석되는 값만 쓰고
     # 아니면 가격 기반 grade 필드로 폴백한다.
@@ -297,6 +306,38 @@ def _style_vars(kind: str) -> dict[str, str]:
             "grade_bg": "#F8F5EA",
             "grade_fg": "#0B7F88",
             "price_bg": "#F8F5EA",
+            "price_fg": "#11110E",
+        },
+        "sgc": {
+            "outer": "#141414",
+            "wrap": "#2B2B2B",
+            "grade_bg": "#F5F5F2",
+            "grade_fg": "#141414",
+            "price_bg": "#F5F5F2",
+            "price_fg": "#11110E",
+        },
+        "tag": {
+            "outer": "#1F4E79",
+            "wrap": "#2D6DA8",
+            "grade_bg": "#EFF5FB",
+            "grade_fg": "#1F4E79",
+            "price_bg": "#EFF5FB",
+            "price_fg": "#11110E",
+        },
+        "ace": {
+            "outer": "#5B2D8E",
+            "wrap": "#7A3EB8",
+            "grade_bg": "#F5EFFB",
+            "grade_fg": "#4A2373",
+            "price_bg": "#F5EFFB",
+            "price_fg": "#11110E",
+        },
+        "graded": {
+            "outer": "#4F5B66",
+            "wrap": "#66737F",
+            "grade_bg": "#F2F4F5",
+            "grade_fg": "#3C464F",
+            "price_bg": "#F2F4F5",
             "price_fg": "#11110E",
         },
         "raw": {
