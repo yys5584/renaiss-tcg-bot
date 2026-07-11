@@ -928,7 +928,12 @@ async def test_active_catch_survives_starter_database_failure(monkeypatch):
 
     assert active.catchers[58] == "New Trainer"
     bot.edit_message_text.assert_awaited_once()
-    message.reply_text.assert_not_awaited()
+    # A starter-write failure must not block the entry receipt; the only reply
+    # is the draw confirmation, never a starter/welcome message.
+    message.reply_text.assert_awaited_once()
+    receipt_text = message.reply_text.await_args.args[0]
+    assert "entered the draw" in receipt_text
+    assert "Welcome Card" not in receipt_text
     _active.clear()
 
 

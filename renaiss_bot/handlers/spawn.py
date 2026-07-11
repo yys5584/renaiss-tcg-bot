@@ -30,6 +30,10 @@ from renaiss_bot.database.event_queries import (
     reserve_spawn_dispatch,
 )
 from renaiss_bot.database.market_queries import register_market_reveal
+from renaiss_bot.handlers.message_cleanup import (
+    command_delete_delay_seconds,
+    delete_group_command_job,
+)
 from renaiss_bot.database.queries import award_spawn_card, grant_first_c_starter
 from renaiss_bot.renderers.overlay import (
     overlay_cache_key,
@@ -609,6 +613,7 @@ async def catch_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 refresh_text = _spawn_text(refresh_active)
                 refresh_keyboard = _guess_keyboard(refresh_active)
                 refresh_message_id = refresh_active.message_id
+                entry_count = len(refresh_active.catchers)
             else:
                 refresh_message_id = None
         if refresh_message_id is not None:
@@ -621,6 +626,26 @@ async def catch_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 )
             except Exception:
                 pass
+            # 시즌1식 참가 확인: 등록 답장을 보내고 명령과 같은 주기로 청소한다.
+            if update.effective_message:
+                try:
+                    receipt = await update.effective_message.reply_text(
+                        f"🎯 <b>{escape(_display_name(update))}</b> entered the draw — "
+                        f"{entry_count} catching",
+                        parse_mode="HTML",
+                        disable_notification=True,
+                    )
+                    job_queue = getattr(context, "job_queue", None)
+                    if job_queue is not None:
+                        job_queue.run_once(
+                            delete_group_command_job,
+                            when=command_delete_delay_seconds(),
+                            data={"chat_id": chat_id, "message_id": receipt.message_id},
+                            name=f"renaiss_command_cleanup_{chat_id}_{receipt.message_id}",
+                            job_kwargs={"misfire_grace_time": 300},
+                        )
+                except Exception:
+                    pass
 
     if no_active_spawn:
         if chat_id != official_chat_id() or user_id in _first_c_feedback_users:
