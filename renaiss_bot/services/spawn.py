@@ -54,7 +54,9 @@ GRADE_TIER_SHORT = {
     "R": "B", "RR": "B",
     "C": "C", "U": "C",
 }
-TIER_MACHINES = {"TOP": "eden", "S": "eden", "A": "renacrypt", "B": "omega", "C": "omega"}
+# 머신은 카테고리 풀이 먼저다: Eden은 One Piece 전용 가챠, Pokémon은 티어로
+# RenaCrypt(상위)와 OMEGA(하위)를 가른다.
+_POKEMON_TIER_MACHINES = {"TOP": "renacrypt", "S": "renacrypt", "A": "renacrypt", "B": "omega", "C": "omega"}
 
 
 def tier_short(grade: str | None) -> str | None:
@@ -70,8 +72,10 @@ def tier_display(grade: str | None) -> str:
     return "TOP" if short == "TOP" else f"Tier {short}"
 
 
-def tier_machine(grade: str | None) -> str:
-    return TIER_MACHINES.get(tier_short(grade) or "C", "omega")
+def tier_machine(grade: str | None, category: str | None = None) -> str:
+    if str(category or "").strip().lower() == "one_piece_tcg":
+        return "eden"
+    return _POKEMON_TIER_MACHINES.get(tier_short(grade) or "C", "omega")
 
 
 # 가격 기반 수집 등급. 스폰 밴드 기준선(rare=$100, grail=$500)과 정렬된다.

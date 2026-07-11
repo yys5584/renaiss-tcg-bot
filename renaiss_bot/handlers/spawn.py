@@ -468,10 +468,12 @@ async def spawn_tick(context: ContextTypes.DEFAULT_TYPE, *, burst: bool = False)
             # 등급(가격대)별 블라인드 프레임 이미지를 우선 시도하고, 실패 시 텍스트 프롬프트.
             message = None
             try:
-                prompt_key = prompt_render_key(spawn.card.grade or "R")
+                prompt_key = prompt_render_key(spawn.card.grade or "R", spawn.card.category)
                 prompt_payload = await get_telegram_file_id(prompt_key)
                 if not prompt_payload:
-                    prompt_payload = await render_prompt_card(spawn.card.grade or "R")
+                    prompt_payload = await render_prompt_card(
+                        spawn.card.grade or "R", spawn.card.category
+                    )
                 if prompt_payload:
                     if isinstance(prompt_payload, bytes):
                         prompt_photo = BytesIO(prompt_payload)

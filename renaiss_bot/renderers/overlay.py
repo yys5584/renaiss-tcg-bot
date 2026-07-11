@@ -636,16 +636,16 @@ async def _render_overlay_card(card: CardIdentity, price: RenaissPrice) -> bytes
     return rendered
 
 
-def prompt_render_key(grade: str) -> str:
-    """Stable cache key: 티어에 매칭된 머신 + 배지 조합."""
+def prompt_render_key(grade: str, category: str | None = None) -> str:
+    """Stable cache key: 카테고리·티어에 매칭된 머신 + 배지 조합."""
     from renaiss_bot.services.spawn import tier_machine, tier_short
 
     tier = tier_short(grade) or "C"
-    return f"spawn-prompt-v3:{tier_machine(grade)}:{tier}"
+    return f"spawn-prompt-v3:{tier_machine(grade, category)}:{tier}"
 
 
-async def render_prompt_card(grade: str) -> bytes | None:
-    """블라인드 프롬프트: 결과 티어와 매칭된 Renaiss 가챠 머신 이미지."""
+async def render_prompt_card(grade: str, category: str | None = None) -> bytes | None:
+    """블라인드 프롬프트: 결과 카드의 풀(카테고리)·티어와 매칭된 가챠 머신."""
     from renaiss_bot.renderers.pillow_overlay import render_machine_prompt
     from renaiss_bot.services.spawn import tier_display, tier_machine, tier_short
 
@@ -653,7 +653,7 @@ async def render_prompt_card(grade: str) -> bytes | None:
 
     def run() -> bytes | None:
         rendered = render_machine_prompt(
-            machine=tier_machine(grade),
+            machine=tier_machine(grade, category),
             tier=tier,
             tier_label=tier_display(grade) if tier == "TOP" else tier,
         )
