@@ -217,7 +217,8 @@
     document.querySelectorAll("[data-auth-action]").forEach(function (button) {
       if (state.user) {
         button.disabled = false;
-        button.textContent = (state.user.display_name || "Collector") + " · " + t("logout");
+        button.innerHTML = '<span class="auth-label">' +
+          escapeHTML(state.user.display_name || "Collector") + " · " + escapeHTML(t("logout")) + "</span>";
         button.classList.remove("btn-connect");
         button.classList.add("btn-logout");
       } else {

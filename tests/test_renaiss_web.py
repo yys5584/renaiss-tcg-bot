@@ -73,7 +73,7 @@ async def test_preview_serves_only_prefixed_app_and_security_headers(preview_cli
     assert response.status == 200
     text = await response.text()
     assert "Renaiss" in text
-    assert "/renaiss/static/app.js?v=20260712-5" in text
+    assert "/renaiss/static/app.js?v=20260712-6" in text
     assert 'data-copy="/mycards"' in text
     assert 'data-copy="/market"' not in text
     assert response.headers["X-Content-Type-Options"] == "nosniff"
