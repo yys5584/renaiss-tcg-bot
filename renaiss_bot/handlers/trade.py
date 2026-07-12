@@ -272,7 +272,7 @@ async def on_trade_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     text = (
         f"{icon('exchange')} <b>TRADE COMPLETE</b>\n"
-        f"<b>{escape(offer['from_name'])}</b> ⇄ <b>{escape(offer['to_name'])}</b>\n"
+        f"<b>{escape(offer['from_name'])}</b> {icon('exchange')} <b>{escape(offer['to_name'])}</b>\n"
         f"{_card_line(result['initiator_gave'])}\n"
         f"{_card_line(result['partner_gave'])}"
         f"{_total_line(offer['from_name'], offer['from_id'])}"
