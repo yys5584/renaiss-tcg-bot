@@ -315,8 +315,10 @@ async def security_headers(request: web.Request, handler):
     if request.path.startswith("/renaiss/api/") or request.path.endswith(("/livez", "/readyz")):
         response.headers["Cache-Control"] = "no-store"
     elif request.path.startswith("/renaiss/static/"):
+        # Static URLs are version-busted (?v=...), so long immutable caching is
+        # safe and removes the stale-edge window Cloudflare kept around deploys.
         response.headers["Cache-Control"] = (
-            "no-store" if request.app[PREVIEW_KEY] else "public, max-age=300"
+            "no-store" if request.app[PREVIEW_KEY] else "public, max-age=31536000, immutable"
         )
     else:
         response.headers.setdefault("Cache-Control", "no-store")
