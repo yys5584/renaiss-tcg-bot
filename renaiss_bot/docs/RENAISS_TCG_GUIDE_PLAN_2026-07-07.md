@@ -1,5 +1,11 @@
 # Renaiss 봇 "TCG 가이드" 기획 — 2026-07-07
 
+> **역사적 참고 · 2026-07-11 확정:** 이 문서의 RP 구매, 프리미엄팩 보상,
+> 드랍 `d/f`, 포트폴리오 수익률 경쟁은 현재 제품 규칙이 아니다. 기본 파일럿은
+> `c → blind guess → reveal`과 별도 Daily Pick이며 레거시 팩 경제는 꺼져 있다.
+> 최신 기준은 `GAME_PHILOSOPHY.md`와
+> `RENAISS_COLLECTOR_MARKET_CHALLENGE_PLAN_2026-07-10.html`이다.
+
 > 사장님 컨펌 방향: **금액(시세)을 전면에 + TCG 가이드 정체성**.
 > 확정 3기능: ① 포트폴리오 수익률 ② 그레이딩 프리미엄 ③ 데일리 가격 퀴즈(메인 그룹).
 > 이 문서는 기획 1장. 구현은 사장님 컨펌 후 시작.
@@ -17,7 +23,7 @@
 
 | 자산 | 위치 | 상태 |
 |---|---|---|
-| 드랍/카드팩 (ㅌ/ㅊ 흐름) | `handlers/drop.py`, `handlers/cardpack.py` | 동작 |
+| 블라인드 스폰/카드팩 (`c` 흐름) | `handlers/spawn.py`, `handlers/cardpack.py` | 동작 |
 | `/price` 시세 조회 (FMV/등급/7일 변동) | `handlers/price.py`, `services/pricing.py` | 동작 |
 | 시세 스냅샷 저장 | `services/pricing.py::_store_snapshot` | 있음 (수익률 계산의 기반) |
 | 슬랩 라벨 카드 이미지 (PSA/BGS/CGC 색상) | `renderers/overlay.py` | 동작 |
@@ -66,7 +72,7 @@
 
 1. **Index API는 베타** — 시세 누락/지연 가능. 모든 금액 표기에 "reference data" 유지 (기존 문서 방침 그대로).
 2. **투자 권유 아님** — "시세를 알려주는 가이드"까지만. 수익 보장/추천 문구 금지.
-3. **ㅌ/ㅊ 흐름 불변** — 수집 명령은 건드리지 않음 (CLAUDE.md 절대 규칙).
+3. **영어판 `c` 흐름 유지** — catch의 한 글자 진입점을 복잡하게 만들지 않음 (`AGENTS.md` 절대 규칙).
 4. 퀴즈 알림은 하루 1회 고정 — 도배 금지.
 
 ---
@@ -80,6 +86,8 @@
 | ③ 데일리 퀴즈 | `services/quiz.py`, `handlers/quiz.py`, `jobs.py` (21:00 KST), `database/schema.py` (테이블 3개) | ✅ 코드 완료, 그룹 개설 대기 |
 | 재시작 복구 | `jobs.py::recover_open_quiz_rounds` — 정산 안 된 라운드 재스케줄 | ✅ |
 | 단위 테스트 | `tests/test_renaiss_quiz.py` 19건 | ✅ 통과 |
+| 블라인드 스폰 | `handlers/spawn.py` — `c` 추첨 + FMV 추측/공개 분포 | ✅ |
+| Daily Market Pick 기반 | `services/market.py`, `database/market_queries.py`, `handlers/market.py` | ✅ 하루 한 장 잠금 / 매수·매도·수수료 제외 / T+24h·리그는 다음 단계 |
 
 ## 팩 경제 (2026-07-07 사장님 컨펌 — "운영 게임" 방향)
 

@@ -5,12 +5,16 @@ from __future__ import annotations
 from collections import Counter
 from html import escape
 
+from renaiss_bot.services.market import VERIFIED_PRICE_SOURCES
 from renaiss_bot.services.models import PackOpenResult, RenaissPrice
 
 
 def _price_line(price: RenaissPrice) -> str:
     if price.fmv_usd is not None:
-        line = f"Market Value: <b>${price.fmv_usd:,.2f}</b>"
+        if price.status == "exact" and price.source in VERIFIED_PRICE_SOURCES:
+            line = f"Renaiss reference FMV: <b>${price.fmv_usd:,.2f}</b>"
+        else:
+            line = f"Candidate reference value: <b>${price.fmv_usd:,.2f}</b> · unverified"
         if price.change_7d_pct is not None:
             line += f" / 7d <b>{price.change_7d_pct:+.1f}%</b>"
         return line
@@ -35,7 +39,7 @@ def format_pack_caption(result: PackOpenResult) -> str:
     total_cards = len(result.cards)
     pack_label = "Premium Pack" if result.pack_type == "premium" else "Standard Pack"
     lines = [
-        "<b>Renaiss Edition Pack Opened</b>",
+        "<b>Renaiss Collaboration Pack Opened</b>",
         "------------",
         f"Pack: <b>{pack_label}</b> x{result.pack_count} / Cards {total_cards}",
         f"Best pull: <b>{escape(best.card_name)}</b> {escape(best.grade)}",
@@ -47,6 +51,7 @@ def format_pack_caption(result: PackOpenResult) -> str:
         f"Card pool: <code>{escape(result.pool_source)}</code>",
         f"Data source: <code>{escape(result.best_price.source)}</code>",
         "",
-        "Renaiss Index API is beta data. Treat Market Value as an experimental reference, not a final market fact.",
+        "All displayed values are experimental references, not investment advice or scored results.",
+        "In-game collectible only · no physical card or NFT ownership.",
     ]
     return "\n".join(lines)

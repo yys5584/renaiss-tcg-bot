@@ -9,12 +9,115 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import ipaddress
 import logging
 import os
+import socket
+from urllib.parse import urlparse
 
 import aiohttp
 
 logger = logging.getLogger(__name__)
+_ALLOWED_IMAGE_TYPES = {
+    "image/png",
+    "image/jpeg",
+    "image/webp",
+    "image/gif",
+    "image/avif",
+}
+
+
+def _max_image_bytes() -> int:
+    try:
+        return min(10_000_000, max(64_000, int(os.getenv("RENAISS_IMAGE_MAX_BYTES", "5000000"))))
+    except ValueError:
+        return 5_000_000
+
+
+def _configured_image_hosts() -> set[str]:
+    return {
+        item.strip().lower().rstrip(".")
+        for item in os.getenv(
+            "RENAISS_IMAGE_ALLOWED_HOSTS",
+            "images.pokemontcg.io",
+        ).split(",")
+        if item.strip()
+    }
+
+
+def _remote_image_url_allowed(url: str) -> bool:
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+    return (
+        parsed.scheme == "https"
+        and parsed.hostname is not None
+        and parsed.hostname.lower().rstrip(".") in _configured_image_hosts()
+        and parsed.port in {None, 443}
+        and not parsed.username
+        and not parsed.password
+    )
+
+
+async def _host_resolves_public(hostname: str) -> bool:
+    try:
+        records = await asyncio.get_running_loop().getaddrinfo(
+            hostname,
+            443,
+            type=socket.SOCK_STREAM,
+        )
+    except (OSError, socket.gaierror):
+        return False
+    if not records:
+        return False
+    for record in records:
+        try:
+            address = ipaddress.ip_address(record[4][0])
+        except ValueError:
+            return False
+        if not address.is_global:
+            return False
+    return True
+
+
+def _safe_data_uri(url: str) -> str | None:
+    # Base64 expands bytes by roughly 4/3. Keep a cheap encoded-size guard,
+    # then validate and measure the decoded payload so this path has the same
+    # byte ceiling as remote downloads.
+    if len(url) > ((_max_image_bytes() * 4 // 3) + 256):
+        return None
+    header, separator, payload = url.partition(",")
+    if not separator or ";base64" not in header.lower():
+        return None
+    content_type = header[5:].split(";", 1)[0].lower()
+    if content_type not in _ALLOWED_IMAGE_TYPES or not payload:
+        return None
+    try:
+        raw = base64.b64decode(payload, validate=True)
+    except (ValueError, TypeError):
+        return None
+    if not raw or len(raw) > _max_image_bytes():
+        return None
+    return url if _image_bytes_match_type(raw, content_type) else None
+
+
+def _image_bytes_match_type(raw: bytes, content_type: str) -> bool:
+    """Reject mislabeled HTML/SVG before it reaches Chromium's decoder."""
+    if content_type == "image/png":
+        return raw.startswith(b"\x89PNG\r\n\x1a\n")
+    if content_type == "image/jpeg":
+        return raw.startswith(b"\xff\xd8\xff")
+    if content_type == "image/gif":
+        return raw.startswith((b"GIF87a", b"GIF89a"))
+    if content_type == "image/webp":
+        return len(raw) >= 12 and raw.startswith(b"RIFF") and raw[8:12] == b"WEBP"
+    if content_type == "image/avif":
+        return len(raw) >= 12 and raw[4:8] == b"ftyp" and raw[8:12] in {
+            b"avif",
+            b"avis",
+        }
+    return False
 
 
 def _render_pool_size() -> int:
@@ -58,7 +161,10 @@ async def _ensure_browser() -> None:
                 pass
         _playwright = await async_playwright().start()
         _browser = await _playwright.chromium.launch(
-            args=["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
+            # Keep Chromium's process sandbox enabled. Callers already fall
+            # back to text when rendering fails, so availability must never
+            # weaken this boundary.
+            args=["--disable-gpu", "--disable-dev-shm-usage"],
         )
         _render_sem = asyncio.Semaphore(_render_pool_size())
         logger.info("Renaiss renderer browser ready (pool=%s)", _render_pool_size())
@@ -93,29 +199,41 @@ async def close_renderer() -> None:
 
 
 async def resolve_image_to_data_uri(url: str | None, *, timeout_seconds: float = 6.0) -> str | None:
-    """Fetch a remote http(s) image and return a data: URI. data: URIs pass through.
-    On any failure returns the original url (browser can still try to load it)."""
+    """Inline one allowlisted public image; never let Chromium fetch remote URLs."""
     if not url:
-        return url
+        return None
     if url.startswith("data:"):
-        return url
-    if not url.startswith(("http://", "https://")):
-        return url
+        return _safe_data_uri(url)
+    if not _remote_image_url_allowed(url):
+        return None
+    parsed = urlparse(url)
+    if not parsed.hostname or not await _host_resolves_public(parsed.hostname):
+        return None
     try:
         timeout = aiohttp.ClientTimeout(total=timeout_seconds)
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(url) as response:
+            async with session.get(url, allow_redirects=False) as response:
                 if response.status != 200:
-                    return url
-                content_type = response.headers.get("Content-Type", "image/png").split(";")[0].strip()
-                if not content_type.startswith("image/"):
-                    content_type = "image/png"
-                raw = await response.read()
+                    return None
+                content_type = response.headers.get("Content-Type", "").split(";")[0].strip().lower()
+                if content_type not in _ALLOWED_IMAGE_TYPES:
+                    return None
+                declared_length = response.content_length
+                if declared_length is not None and declared_length > _max_image_bytes():
+                    return None
+                chunks = bytearray()
+                async for chunk in response.content.iter_chunked(64 * 1024):
+                    chunks.extend(chunk)
+                    if len(chunks) > _max_image_bytes():
+                        return None
+                raw = bytes(chunks)
+                if not raw or not _image_bytes_match_type(raw, content_type):
+                    return None
         encoded = base64.b64encode(raw).decode("ascii")
         return f"data:{content_type};base64,{encoded}"
     except Exception as exc:
         logger.debug("Renaiss image inline skipped (%s): %s", url, exc)
-        return url
+        return None
 
 
 async def render_html_to_png(html: str, width: int, height: int) -> bytes:
@@ -129,6 +247,14 @@ async def render_html_to_png(html: str, width: int, height: int) -> bytes:
     page = None
     try:
         page = await _browser.new_page(viewport={"width": width, "height": height})
+        async def block_remote(route):
+            scheme = urlparse(route.request.url).scheme.lower()
+            if scheme in {"about", "data"}:
+                await route.continue_()
+            else:
+                await route.abort()
+
+        await page.route("**/*", block_remote)
         await page.set_content(html, wait_until="domcontentloaded")
         try:
             await page.wait_for_load_state("networkidle", timeout=1500)

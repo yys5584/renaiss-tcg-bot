@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>르네이스 — 시즌1 리메이크 기획서 (2026-07-08)</title>
+<style>
+  body { font-family: 'Pretendard', 'Malgun Gothic', sans-serif; max-width: 880px; margin: 40px auto; padding: 0 24px; line-height: 1.75; color: #2b2b2b; background: #faf8f4; }
+  h1 { font-size: 27px; border-bottom: 3px solid #d85a30; padding-bottom: 12px; }
+  h2 { font-size: 20px; margin-top: 46px; color: #1a1a1a; border-left: 5px solid #d85a30; padding-left: 12px; }
+  h3 { font-size: 16px; margin-top: 26px; }
+  .meta { color: #888; font-size: 13px; }
+  .box { background: #fff; border: 1px solid #e5ddca; border-radius: 10px; padding: 18px 22px; margin: 16px 0; }
+  .verdict { background: #fdf0ea; border: 1px solid #d85a30; border-radius: 10px; padding: 16px 20px; margin: 18px 0; font-weight: 600; }
+  .loop { background: #f4ece1; border-radius: 10px; padding: 18px 22px; margin: 18px 0; font-size: 15px; }
+  .loop b { color: #993c1d; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 14px; background: #fff; }
+  th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #f3ecd9; }
+  .keep { color: #0f6e56; font-weight: 600; }
+  .drop { color: #993c1d; }
+  .pick { background: #fdf3d7; border: 2px solid #e8b849; border-radius: 8px; padding: 3px 8px; font-size: 12px; font-weight: 600; }
+  code { background: #efe8da; padding: 1px 6px; border-radius: 4px; font-size: 90%; }
+</style>
+</head>
+<body>
+
+<div class="verdict"><b>역사적 참고 · 2026-07-11 확정:</b> 이 문서의 RP 상점, 누적 자산, 구매형 rush, 기존 <code>d/f</code> 흐름은 현재 Renaiss 제품 규칙이 아니다. 기본 파일럿은 영어 <code>c</code>, 블라인드 FMV 추측, 공개 랜덤 포획, 별도 Daily Pick을 사용한다. 최신 기준은 <code>GAME_PHILOSOPHY.md</code>와 <code>RENAISS_COLLECTOR_MARKET_CHALLENGE_PLAN_2026-07-10.html</code>이다.</div>
+
+<h1>르네이스 — 시즌1 리메이크 기획서</h1>
+<p class="meta">2026-07-08 · 무대: 르네이스 봇 공식방 · 방향: 시즌1의 영혼을 단순화해 새 유형으로 재해석 · 개발은 나중, 방향 합의용</p>
+
+<div class="verdict">
+한 줄: <u>"TCG 시세 가이드"라는 옷은 유지하되, 그 밑의 몸통을 시즌1의 강스 사냥으로 되돌린다.</u><br>
+그리고 잡은 걸로 매일 대회에 나가는 리추얼까지 — 사냥과 무대가 서로를 먹여 살리는 고리를 복원한다.
+</div>
+
+<h2>1. 왜 이걸 하나 — 진단</h2>
+<p>실데이터로 확인했습니다. 4월 시즌1 1위 <b>"시간"</b>은 한 달간 6,649마리를 잡았고, <b>30일 하루도 안 빠졌으며</b>, 하루 평균 222마리를 잡았습니다. 그 사람이 그렇게 몰입한 이유는 시즌1이 이 네 가지를 줬기 때문이에요:</p>
+<div class="box">
+<b>① 직접</b> — 눈앞의 걸 내가 잡음 (내 선택 = 내 결과)<br>
+<b>② 무제한</b> — 손 근질거리면 계속 잡음 (몰입)<br>
+<b>③ 실시간</b> — 강스·희귀몹 뜨면 우르르 (채팅방이 무대) → 르네이스선 고가·프로모 카드로 재현<br>
+<b>④ 결정</b> — 그냥 <code>ㅊ</code> 칠까, 이 고가 카드에 아까운 <code>ㅁ</code>(마스터볼) 지금 태울까
+</div>
+<p>시즌2가 카드팩을 얹으면서 이 네 개가 다 뭉개졌습니다. 팩 까면 랜덤 10장(직접성 상실), 하루 5팩 제한(무제한 상실), 조용한 복권 드랍(실시간 상실), 볼 선택 없음(결정 상실). <b>재미의 심장이 사라진 게 아니라, 새 레이어가 그걸 덮은 겁니다.</b> 시간이 같은 고인물이 시즌2에선 30초 만에 할 게 없어져요.</p>
+
+<h2>2. 매일 도는 게임 고리</h2>
+<div class="loop">
+<b>[사냥]</b> 공식방에 카드 등장 → <code>c</code>로 잡기, 고가·프로모 카드는 <code>m</code> 지를까 결정 → 우르르<br>
+&nbsp;&nbsp;&nbsp;&nbsp;↓ 잡은 카드 = 내 컬렉션이자 대회 자원<br>
+<b>[대회]</b> <code>/enter</code>로 잡은 카드 라인업 짜서 참가 → 한 주간 시세 변동률로 겨룸 → 주간 챔피언<br>
+&nbsp;&nbsp;&nbsp;&nbsp;↓ 대회 성적·보상이 다시 사냥할 이유를 만듦<br>
+<b>[반복]</b> "저 카드 오를 것 같은데 강스 때 잡아서 라인업에 넣자"
+</div>
+<p>시즌1의 <b>사냥 → 키우기 → 대회</b> 고리를, 카드로 단순화해 복원하는 게 전부입니다.</p>
+
+<h2>3. 사냥 파트 — 강스, 단순화 버전</h2>
+<p class="drop">르네이스는 영어 버전 → 명령은 전부 영어. 단문자 잡기 키로 "ㅊ 한 방"의 빠른 손맛 유지.</p>
+
+<h3>스폰 방식 — 시즌1 그대로 (공식방 상시 / 다른 방 강스)</h3>
+<div class="box">
+- <b>공식방 = 상시 스폰</b> (시즌1 아케이드). 봇이 30초 간격쯤 카드 자동 등장 → 항상 잡을 게 있는 앵커. 사람들은 그냥 <code>c</code> 치며 잡음.<br>
+- <b>다른 방(KOL 방) = 강스</b>. 평소 조용 → 누가 <code>/rush</code> 켜면 그 방에 몇 분간 스폰 폭증 "🔥 Rush is live!" → 그 방 우르르. (시즌1 임시 아케이드 이식)<br>
+- 시세 높은·프로모 카드는 빛 이펙트로 크게 예고 → 몰림. <b>참여 인원 많을수록 전원 확률↑</b> → "빨리 와서 잡아!" 엔진.
+</div>
+
+<h3>명령 스킴 (영어)</h3>
+<table>
+<tr><th>명령</th><th>역할</th><th>성격</th></tr>
+<tr><td><code>c</code></td><td>catch — 그냥 잡기</td><td>공짜, 확률. 기본 손맛 (시즌1 <code>ㅊ</code>)</td></tr>
+<tr><td><code>m</code></td><td>master pull — 확정</td><td>이 카드 확정 획득. <b>귀하고 제한된 자원</b> → "아까운 걸 지금 태울까"의 결정 (시즌1 <code>ㅁ</code>)</td></tr>
+<tr><td><code>/rush</code></td><td>다른 방에서 강스 켜기</td><td>그 방 스폰 버스트 발동. <b>상점에서 rush 티켓 사서 소모</b>(도배 방지 + KOL이 자기 방에 쏘는 이벤트감)</td></tr>
+</table>
+<p class="drop">시즌1의 <code>ㅎ</code>(하이퍼)·<code>ㅍ</code>(우선볼)은 버림 — 복잡하니까 2개로 압축. 현재 르네이스 <code>d</code>/<code>f</code> 복권 드랍은 이 구조로 교체(폐기).</p>
+
+<h3>희귀 스폰 = 시세·프로모 기반 (이로치 대체)</h3>
+<div class="box">
+시즌1의 "이로치 뜸"을 <b>르네이스답게 "고가·프로모 카드 뜸"으로 교체</b>. 흥분의 축이 실제 시세라 정체성과 일치하고, 스테이크가 눈에 보임(가격표가 딱 나옴).<br><br>
+스폰 등급을 <b>시세로 나눔</b> (수치 초안):
+<table style="margin-top:10px">
+<tr><th>등급</th><th>조건</th><th>연출</th></tr>
+<tr><td>일반</td><td>~$20 미만 카드</td><td>조용히 등장 (썰물)</td></tr>
+<tr><td>레어</td><td>$100+ 또는 SAR/UR 등급</td><td>빛 예고 "💎 고가 카드 접근 중" → 우르르</td></tr>
+<tr><td>그레일</td><td>$500+ 또는 프로모/특별판</td><td>온 방 알림 "🔥 그레일 등장!" → 최대 몰림</td></tr>
+</table>
+<div style="margin-top:10px">→ "$500 리자몽이다, <code>m</code> 각!" — 시즌1 이로치 강스의 그 순간을 시세로 재현. <b>비쌀수록 예고가 커지고 우르르의 크기가 달라짐.</b> 자연스럽게 밀물/썰물 리듬이 생김.</div>
+</div>
+
+<h2>4. 상점 경제 — 사서 쓰는 소모품 (시즌1 방식)</h2>
+<div class="box">
+쿨타임 로직 대신 <b>상점에서 RP로 사서 쓰면 소모</b>하는 시즌1 방식. 희소성이 곧 게이트 — 가진 만큼만 쓴다.
+<table style="margin-top:10px">
+<tr><th>상점 아이템</th><th>용도</th></tr>
+<tr><td>마스터 풀 (<code>m</code>)</td><td>고가 카드 확정 획득. 시즌1 마스터볼 그대로</td></tr>
+<tr><td>Rush 티켓 (<code>/rush</code>)</td><td>다른 방에 강스 발동</td></tr>
+<tr><td>프리미엄팩 등</td><td>기존 RP 상점 유지</td></tr>
+</table>
+<div style="margin-top:10px"><b>고인물 무한구매 방어 = 시즌1 그대로:</b> ① 일일 구매 한도(<code>BP_MASTERBALL_DAILY_LIMIT</code>) ② 가격 누진(<code>_masterball_price(bought_today)</code> — 살수록 비싸짐). RP 아무리 많아도 하루 몇 개까지, 뒤로 갈수록 비싸게 → 자연 방어.</div>
+<div style="margin-top:10px"><b>덤:</b> RP에 강력한 소비처 생김(경제 순환) + "내가 rush 사서 우리 방에 쐈다"는 KOL 활성화 그림(철학의 KOL 예치 감성).</div>
+</div>
+
+<h2>5. 대회 파트 — 데일리 시세 기반 "판타지 카드 펀드"</h2>
+<p>모여서 → 겨루고 → 우승자 영광, 이 <b>리추얼은 그대로</b>. 근데 유형을 배틀이 아니라 <b>르네이스의 정체성인 "실제 시세"로</b> 겨루는 판타지 풋볼형으로 잡습니다. 배틀 엔진을 안 만들어도 되고(이미 만든 시세 인프라 재사용), 유저가 시장을 못 움직이니 <b>조작 불가 · 순수 예측 실력</b> 대회가 됩니다.</p>
+
+<h3>어떻게 돌아가나</h3>
+<div class="box">
+- 잡은 카드 중 <b>라인업 N장 선택</b>(예: 5장)해서 참가 (<code>/enter</code>)<br>
+- 한 주 동안 각 카드의 <b>시세 변동률(%)</b>을 봇이 추적<br>
+- 점수 = 라인업 평균 상승률. 제일 많이 오른 라인업이 <b>주간 챔피언</b> → 마스터풀/팩/영광<br>
+- 마감 발표: "이번 주 펀드매니저: 문유 +18% 🏆" + 카드 이미지
+</div>
+
+<h3>왜 주간인가 (매일이 아니라)</h3>
+<div class="box">
+- <b>카드 시세는 하루엔 거의 안 움직임</b>(±1~2% 노이즈) → 매일이면 우승이 실력이 아니라 노이즈로 갈림. <b>7일이면 5~20% 트렌드가 나와 예측 실력이 진짜 드러남.</b><br>
+- 우리가 이미 <b>7일 변동률을 계산 중</b> → 데이터가 주간에 딱 맞음.<br>
+- "일주일이면 까먹고 안 한다"는 걱정은 → <b>매일 순위 중계로 해결.</b>
+</div>
+
+<h3>참여 유지 장치</h3>
+<div class="box">
+- <b>매일 순위 중계</b> — 공식방에 "3일차: 문유 +8% 선두!" → 매일 들여다볼 이유. 레이스 드라마가 곧 일일 참여<br>
+- <b>주중 1회 교체권</b> — 라인업 한 번 갈아타기(판타지의 "트레이드"). 매일 리셋 없이도 매일 만질 거리<br>
+- 주간 챔피언 1명 → 매일 소소한 우승보다 명예·자랑 큼
+</div>
+
+<h3>격차 0 설계</h3>
+<div class="box">
+점수를 <b>절대 시세가 아니라 변동률(%)로</b> 매김. $500 카드 든 고인물이나 $30 카드 든 뉴비나 <b>"누가 더 오를 걸 골랐나"로만 붙음.</b> 뉴비가 싼 카드로도 그게 더 펌핑되면 이김. 동시에 "잡은 걸로 대회 나간다"는 사냥→대회 연결도 유지.
+</div>
+
+<h3>세 개의 리듬</h3>
+<div class="loop">
+<b>실시간</b> — 강스 사냥 (우르르, 순간) · <b>매일</b> — 시세 퀴즈 (하루 1판 습관) · <b>주간</b> — 카드 펀드 대회 (전략·명예)<br>
+일일 습관은 강스+퀴즈가 잡아주니, 대회는 주간 프레스티지 층으로. 리듬이 안 겹쳐 깔끔.
+</div>
+
+<h2>6. 기존 르네이스 기능은 어디로</h2>
+<p>지금 만든 것들은 버리지 않고, <b>사냥·대회라는 주인공을 받치는 사이드</b>로 재배치합니다:</p>
+<table>
+<tr><th>기존 기능</th><th>새 역할</th></tr>
+<tr><td>카드팩(<code>/open</code>)</td><td>사냥 못 하는 시간대의 보조 획득 수단. 주인공 자리는 강스에 내줌</td></tr>
+<tr><td>시세·그레이딩 가이드</td><td>잡은 카드의 "가치"를 보여주는 자랑·수집 레이어 (르네이스 정체성 유지)</td></tr>
+<tr><td>데일리 퀴즈</td><td>마스터 풀·보상 버는 통로 중 하나</td></tr>
+<tr><td>플렉스(<code>/flex</code>)</td><td>사냥·대회 성과를 자랑하는 통로</td></tr>
+<tr><td>포트폴리오·RP</td><td>그대로 유지 (자산 개념)</td></tr>
+</table>
+
+<h2>7. 무엇을 살리고 무엇을 단순화했나</h2>
+<table>
+<tr><th></th><th>시즌1</th><th>이 기획 (르네이스)</th></tr>
+<tr><td>잡기</td><td class="keep">직접 ㅊ/ㅁ/ㅎ/ㅍ</td><td>직접 <code>c</code>/<code>m</code> 2종으로 압축 (영어)</td></tr>
+<tr><td>희귀 강스</td><td class="keep">이로치 스폰</td><td class="keep">공식방 강스 + <b>시세·프로모 기반</b> 고가 카드 스폰</td></tr>
+<tr><td>대회</td><td class="keep">매일, 팀빌딩 배틀(고인물)</td><td>주간 판타지 카드 펀드(시세 변동률) + 매일 순위 중계</td></tr>
+<tr><td>수집 대상</td><td>포켓몬 649종</td><td>실시세 붙은 TCG 카드 (르네이스 옷)</td></tr>
+<tr><td>제한</td><td>ㅊ 일일 cap</td><td>참여 비례 확률 + 마스터 풀 귀함으로 자연 조절</td></tr>
+</table>
+
+<h2>8. 리스크 / 짚을 점</h2>
+<div class="box">
+<b>① 스코프.</b> 르네이스엔 지금 잡기-볼도, 배틀도, 대회도 아예 없음. 사냥+대회를 새로 짓는 건 큰 작업 → 단계적으로. 1단계 강스 사냥, 2단계 대회. 한 번에 다 X.<br><br>
+<b>② 공식방 1개 집중.</b> 강스가 공식방에서만 돌면 거기로 몰림 — 그게 의도(무대 집중). 단 봇 발화량은 관리해야 도배 안 됨.<br><br>
+<b>③ 시세는 참고용.</b> 베타 API라 대회를 "시세"로 하면(2번 유형) 노이즈 위험. 그래서 배틀 유형(1번) 추천.<br><br>
+<b>④ 수치 전부 초안.</b> 참여 확률·마스터 풀 획득량·대회 보상은 유저 보며 조절.
+</div>
+
+<h2>9. 단계별 순서 (개발은 컨펌 후)</h2>
+<table>
+<tr><th>단계</th><th>내용</th></tr>
+<tr><td>1</td><td><b>강스 사냥</b> — 공식방 상시 스폰 + <code>c</code>/<code>m</code> + 참여 비례 확률 + 시세·프로모 희귀 스폰 + 다른 방 <code>/rush</code></td></tr>
+<tr><td>2</td><td><b>상점 경제</b> — 마스터 풀·rush 티켓 구매(RP), 일일 한도 + 가격 누진</td></tr>
+<tr><td>3</td><td><b>주간 카드 펀드 대회</b> — <code>/enter</code> 라인업 참가 + 7일 시세 변동률 집계 + 매일 순위 중계 + 주중 교체권 + 주간 챔피언 보상</td></tr>
+<tr><td>4</td><td>기존 팩/퀴즈/플렉스를 사이드로 재배치, 밸런스 조율</td></tr>
+</table>
+
+<p class="meta">참고: 게임 철학(docs/GAME_PHILOSOPHY.md) · 자랑·소셜 기획(RENAISS_SOCIAL_FLEX_PLAN_2026-07-07) · 4월 페르소나 "시간"(시즌1 1위, 6,649포획/월)</p>
+
+</body>
+</html>

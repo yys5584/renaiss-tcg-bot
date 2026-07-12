@@ -3,81 +3,1108 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, time, timezone
+import os
+import secrets
+from datetime import datetime, time, timedelta, timezone
+from email.utils import parsedate_to_datetime
+from html import escape
 from zoneinfo import ZoneInfo
 
+import aiohttp
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import BadRequest, Forbidden, NetworkError, RetryAfter, TimedOut
 from telegram.ext import Application, ContextTypes
 
-from renaiss_bot.database.queries import list_open_quiz_rounds, snapshot_all_portfolios
-from renaiss_bot.handlers.quiz import close_quiz_job, post_daily_quiz, quiz_chat_id
-from renaiss_bot.handlers.spawn import SPAWN_INTERVAL_SECONDS, official_chat_id, spawn_tick
+from renaiss_bot.database.event_queries import (
+    close_spawn_session,
+    get_runtime_setting,
+    list_open_spawn_sessions,
+    list_spawn_round_entries,
+    list_unfinished_spawns,
+    log_event,
+)
+from renaiss_bot.database.queries import get_catch_ranking
+from renaiss_bot.database.catalog_queries import (
+    acquire_catalog_refresh_lease,
+    finish_catalog_refresh_lease,
+    list_catalog_cards_for_refresh,
+    mark_catalog_refresh_attempted,
+    update_catalog_cached_price,
+)
+from renaiss_bot.database.market_queries import (
+    acquire_market_refresh_job_lease,
+    claim_due_pick_cards,
+    begin_daily_pick_result_bell_delivery,
+    claim_daily_pick_result_bell,
+    enqueue_daily_pick_result_bell,
+    finish_market_refresh_job_lease,
+    get_latest_complete_result_cohort,
+    mark_daily_pick_result_bell_failed,
+    mark_daily_pick_result_bell_sent,
+    record_market_price_snapshot,
+    release_market_refresh_leases,
+    renew_market_refresh_job_lease,
+    settle_due_daily_picks,
+)
+from renaiss_bot.handlers.spawn import (
+    burst_interval_seconds,
+    first_spawn_delay,
+    next_spawn_delay,
+    official_chat_id,
+    spawn_burst_active,
+    spawn_interval_bounds,
+    spawn_tick,
+)
+from renaiss_bot.services.ceremony import ceremony_active, ceremony_minutes
+from renaiss_bot.services.client import RenaissAPICooldown, fetch_official_price
+from renaiss_bot.services.emoji import icon
+from renaiss_bot.services.market import (
+    daily_pick_configuration_issues,
+    daily_pick_enabled,
+    daily_pick_requested,
+    exact_price_lookup_configured,
+)
+from renaiss_bot.services.models import CardIdentity
+from renaiss_bot.services.result_bell import build_daily_pick_result_bell
+from renaiss_bot.services.tracking import cleanup_expired_tracking_links
 
 logger = logging.getLogger(__name__)
 
 KST = ZoneInfo("Asia/Seoul")
-DAILY_QUIZ_TIME_KST = time(hour=21, minute=0, tzinfo=KST)
-DAILY_SNAPSHOT_TIME_KST = time(hour=23, minute=55, tzinfo=KST)
+TRACKING_CLEANUP_TIME_KST = time(hour=4, minute=10, tzinfo=KST)
+RESULT_BELL_POLL_SECONDS = 300
+MAX_REFRESH_INTERVAL_SECONDS = 86_400
+CATALOG_REFRESH_TIMES_KST = (
+    time(hour=3, minute=0, tzinfo=KST),
+    time(hour=15, minute=0, tzinfo=KST),
+)
+RANKING_ANNOUNCE_TIME_KST = time(hour=22, minute=0, tzinfo=KST)
+_RANK_MEDALS = ("🥇", "🥈", "🥉")
 
 
-async def snapshot_portfolios_job(context: ContextTypes.DEFAULT_TYPE) -> None:
-    count = await snapshot_all_portfolios()
-    logger.info("Renaiss portfolio snapshot job done: %s users.", count)
+def _catalog_refresh_limit() -> int:
+    try:
+        return max(1, min(5000, int(os.getenv("RENAISS_CATALOG_REFRESH_LIMIT", "1000"))))
+    except ValueError:
+        return 1000
 
 
-async def recover_open_quiz_rounds(application: Application) -> None:
-    """재시작으로 close 잡이 날아간 라운드를 다시 정산 스케줄에 올린다."""
-    rounds = await list_open_quiz_rounds()
-    if not rounds or application.job_queue is None:
+def _catalog_refresh_enabled() -> bool:
+    raw = os.getenv("RENAISS_CATALOG_REFRESH_ENABLED", "1").strip().lower()
+    return raw in {"1", "true", "yes", "on"} and exact_price_lookup_configured()
+
+
+def _catalog_card(row: dict) -> CardIdentity:
+    metadata = row.get("metadata")
+    if isinstance(metadata, str):
+        try:
+            import json
+
+            metadata = json.loads(metadata)
+        except (TypeError, ValueError):
+            metadata = {}
+    metadata = metadata if isinstance(metadata, dict) else {}
+    source_payload = metadata.get("source_payload")
+    source_payload = source_payload if isinstance(source_payload, dict) else {}
+    market_grade = str(
+        metadata.get("market_grade")
+        or os.getenv("RENAISS_API_DEFAULT_MARKET_GRADE", "PSA 10 Gem Mint")
+        or "PSA 10 Gem Mint"
+    )
+    return CardIdentity(
+        category=str(row.get("category") or "pokemon_tcg"),
+        card_name=str(row.get("card_name") or ""),
+        # Keep the runtime/catalog grade in the identity key. The Partner
+        # request uses metadata.market_grade for the PSA 10 market asset.
+        grade=str(row.get("grade") or "R"),
+        set_code=str(row.get("set_code") or ""),
+        set_name=str(row.get("set_name") or ""),
+        collector_number=str(row.get("collector_number") or ""),
+        language=str(row.get("language") or ""),
+        local_card_id=str(row.get("local_card_id") or ""),
+        image_url=row.get("image_url"),
+        metadata={
+            "variation": str(
+                metadata.get("variation")
+                or metadata.get("variant")
+                or source_payload.get("variation")
+                or source_payload.get("variant")
+                or ""
+            ),
+            "market_grade": market_grade,
+        },
+    )
+
+
+async def refresh_catalog_prices_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Refresh the active season catalog in the background; public spawns stay DB-only."""
+    if not _catalog_refresh_enabled():
+        logger.info("Catalog price refresh skipped: exact Partner lookup is not configured.")
         return
-    now = datetime.now(timezone.utc)
-    for round_data in rounds:
-        closes_at = round_data.get("closes_at")
-        delay = 5.0
-        if closes_at is not None and closes_at > now:
-            delay = max(5.0, (closes_at - now).total_seconds())
-        application.job_queue.run_once(
-            close_quiz_job,
-            when=delay,
-            data=int(round_data["id"]),
-            name=f"renaiss_quiz_close_{round_data['id']}",
-            job_kwargs={"misfire_grace_time": None},
+    owner = f"renaiss-catalog:{os.getpid()}:{secrets.token_hex(12)}"
+    if not await acquire_catalog_refresh_lease(owner=owner, lease_seconds=7200):
+        logger.info("Catalog price refresh skipped: another instance owns the lease.")
+        return
+    refreshed = 0
+    missing = 0
+    failed = 0
+    status = "completed"
+    next_attempt_seconds = 39_600  # 11h: blocks duplicate instances, permits the 12h slot.
+    try:
+        rows = await list_catalog_cards_for_refresh(limit=_catalog_refresh_limit())
+        for index, row in enumerate(rows):
+            card = _catalog_card(row)
+            try:
+                price = await fetch_official_price(card, timeout_seconds=5.0)
+                if price is None:
+                    missing += 1
+                    await mark_catalog_refresh_attempted(local_card_id=card.local_card_id)
+                    continue
+                refreshed += int(
+                    await update_catalog_cached_price(
+                        local_card_id=card.local_card_id,
+                        price=price,
+                    )
+                )
+            except RenaissAPICooldown as exc:
+                failed += len(rows) - index
+                status = "rate_limited"
+                next_attempt_seconds = max(next_attempt_seconds, exc.retry_after_seconds)
+                break
+            except aiohttp.ClientResponseError as exc:
+                failed += 1
+                if exc.status == 429:
+                    status = "rate_limited"
+                    failed += len(rows) - index - 1
+                    break
+                logger.warning(
+                    "Catalog refresh response failed card=%s status=%s",
+                    card.local_card_id,
+                    exc.status,
+                )
+            except Exception as exc:
+                failed += 1
+                logger.warning("Catalog refresh failed card=%s: %s", card.local_card_id, exc)
+        if failed and status == "completed":
+            status = "completed_with_failures"
+        logger.info(
+            "Catalog cache refresh done: due=%s refreshed=%s missing=%s failed=%s.",
+            len(rows),
+            refreshed,
+            missing,
+            failed,
         )
-        logger.info("Recovered quiz round %s: close in %.0fs.", round_data["id"], delay)
+    finally:
+        await finish_catalog_refresh_lease(
+            owner=owner,
+            status=status,
+            retry_after_seconds=next_attempt_seconds,
+        )
+
+
+def _daily_pick_refresh_limit() -> int:
+    try:
+        return max(1, min(50, int(os.getenv("RENAISS_DAILY_PICK_REFRESH_LIMIT", "8"))))
+    except ValueError:
+        return 8
+
+
+def _daily_pick_refresh_seconds() -> int:
+    try:
+        return max(
+            300,
+            min(
+                MAX_REFRESH_INTERVAL_SECONDS,
+                int(os.getenv("RENAISS_DAILY_PICK_REFRESH_SECONDS", "3600")),
+            ),
+        )
+    except (TypeError, ValueError, OverflowError):
+        return 3600
+
+
+def _daily_pick_refresh_lease_seconds() -> int:
+    try:
+        return max(
+            30,
+            min(
+                MAX_REFRESH_INTERVAL_SECONDS,
+                int(os.getenv("RENAISS_DAILY_PICK_REFRESH_LEASE_SECONDS", "180")),
+            ),
+        )
+    except (TypeError, ValueError, OverflowError):
+        return 180
+
+
+def _result_bell_window_open(now: datetime | None = None) -> bool:
+    local = (now or datetime.now(timezone.utc)).astimezone(KST)
+    return (local.hour, local.minute) >= (21, 5)
+
+
+async def cleanup_tracking_links_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    try:
+        count = await cleanup_expired_tracking_links()
+        logger.info("Expired referral-link cleanup done: %s rows.", count)
+    except Exception as exc:
+        logger.warning("Expired referral-link cleanup skipped: %s", exc)
+
+
+def _schedule_next_spawn(context: ContextTypes.DEFAULT_TYPE, delay: float) -> None:
+    # Replace-by-name keeps exactly one loop even if an operator command
+    # rescheduled while this tick was still running.
+    jobs_by_name = getattr(context.job_queue, "get_jobs_by_name", None)
+    for job in jobs_by_name("renaiss_official_spawn") if callable(jobs_by_name) else ():
+        job.schedule_removal()
+    context.job_queue.run_once(
+        spawn_loop_job,
+        when=delay,
+        name="renaiss_official_spawn",
+        job_kwargs={"misfire_grace_time": None},
+    )
+
+
+async def restore_spawn_burst_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """재시작·재배포 후 운영자가 켜둔 burst 모드를 복원한다 (fail-safe: 꺼짐)."""
+    from renaiss_bot.handlers.spawn import BURST_FLAG_KEY
+
+    try:
+        setting = await get_runtime_setting("spawn_burst")
+    except Exception as exc:
+        logger.warning("Burst state restore skipped: %s", exc)
+        return
+    if setting and setting.get("active") is True:
+        application = getattr(context, "application", None)
+        if application is not None and isinstance(getattr(application, "bot_data", None), dict):
+            application.bot_data[BURST_FLAG_KEY] = True
+            logger.info(
+                "Spawn burst mode restored from persisted state (interval=%ss).",
+                burst_interval_seconds(),
+            )
+
+
+async def spawn_loop_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Run one spawn tick and always schedule the next quiet variable interval."""
+    application = getattr(context, "application", None)
+    burst = spawn_burst_active(application)
+    if ceremony_active():
+        # The 22:00 ranking ceremony owns the room; resume right after it,
+        # in burst and pilot mode alike.
+        now_kst = datetime.now(KST)
+        window_end = now_kst.replace(
+            minute=ceremony_minutes() % 60, second=0, microsecond=0
+        )
+        if ceremony_minutes() >= 60:
+            window_end = window_end.replace(minute=0) + timedelta(hours=1)
+        resume_in = max(5.0, (window_end - now_kst).total_seconds() + 5.0)
+        logger.info("Spawn tick deferred for the ranking ceremony (%.0fs).", resume_in)
+        _schedule_next_spawn(context, resume_in)
+        return
+    try:
+        await spawn_tick(context, burst=burst)
+    finally:
+        # Re-read the flag: /spawnoff during a long tick must win immediately.
+        if spawn_burst_active(application):
+            delay = burst_interval_seconds()
+        else:
+            delay = next_spawn_delay()
+        _schedule_next_spawn(context, delay)
+
+
+def _http_retry_after_seconds(value: str | None) -> int:
+    if not value:
+        return 0
+    try:
+        return min(MAX_REFRESH_INTERVAL_SECONDS, max(0, int(float(value))))
+    except (TypeError, ValueError, OverflowError):
+        try:
+            retry_at = parsedate_to_datetime(value)
+        except (TypeError, ValueError, OverflowError):
+            return 0
+        if retry_at.tzinfo is None:
+            retry_at = retry_at.replace(tzinfo=timezone.utc)
+        return min(
+            MAX_REFRESH_INTERVAL_SECONDS,
+            max(0, int((retry_at - datetime.now(timezone.utc)).total_seconds())),
+        )
+
+
+async def refresh_daily_pick_prices_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Fetch new exact marks while one fenced worker owns the API batch."""
+    recovered = await settle_due_daily_picks(limit=500)
+    if not exact_price_lookup_configured():
+        if recovered:
+            logger.info("Settled %s Daily Pick obligations from persisted marks.", len(recovered))
+        logger.warning(
+            "Daily Pick obligation refresh cannot fetch new marks: exact Partner API is not configured."
+        )
+        return
+    lease_owner = f"renaiss-refresh:{os.getpid()}:{secrets.token_hex(12)}"
+    lease_seconds = max(
+        _daily_pick_refresh_lease_seconds(),
+        _daily_pick_refresh_limit() * 10 + 60,
+    )
+    if not await acquire_market_refresh_job_lease(
+        lease_owner=lease_owner,
+        lease_seconds=lease_seconds,
+    ):
+        logger.info("Daily Pick refresh skipped: another worker owns the API lease.")
+        return
+    final_status = "crashed"
+    retry_after_seconds = 0
+    try:
+        final_status, retry_after_seconds = await _refresh_daily_pick_prices_batch(
+            context,
+            recovered=recovered,
+            job_lease_owner=lease_owner,
+            job_lease_seconds=lease_seconds,
+        )
+    finally:
+        try:
+            released = await finish_market_refresh_job_lease(
+                lease_owner=lease_owner,
+                cadence_seconds=_daily_pick_refresh_seconds(),
+                retry_after_seconds=retry_after_seconds,
+                status=final_status,
+            )
+            if not released:
+                logger.warning("Daily Pick refresh lease completion was fenced out.")
+        except Exception as exc:
+            logger.warning("Daily Pick refresh lease completion failed: %s", exc)
+
+
+async def _refresh_daily_pick_prices_batch(
+    context: ContextTypes.DEFAULT_TYPE,
+    *,
+    recovered: list[dict],
+    job_lease_owner: str,
+    job_lease_seconds: int,
+) -> tuple[str, int]:
+    worker_token = secrets.token_hex(16)
+    due_cards = await claim_due_pick_cards(
+        worker_token=worker_token,
+        limit=_daily_pick_refresh_limit(),
+        lease_seconds=job_lease_seconds,
+    )
+    refreshed = 0
+    newer = 0
+    failed = 0
+    newly_settled = 0
+    batch_status = "completed"
+    retry_after_seconds = 0
+    for index, row in enumerate(due_cards):
+        card = CardIdentity(
+            category=str(row["category"]),
+            card_name=str(row["card_name"]),
+            set_code=str(row.get("set_code") or ""),
+            set_name=str(row.get("set_name") or ""),
+            collector_number=str(row.get("collector_number") or ""),
+            language=str(row.get("language") or ""),
+            grade=str(row.get("grade") or "RAW"),
+            local_card_id=str(row.get("local_card_id") or ""),
+            image_url=row.get("image_url"),
+            metadata={"variation": str(row.get("variation") or "")},
+        )
+        try:
+            if not await renew_market_refresh_job_lease(
+                lease_owner=job_lease_owner,
+                lease_seconds=job_lease_seconds,
+            ):
+                batch_status = "lease_lost"
+                failed += len(due_cards) - index
+                break
+            price = await fetch_official_price(card, timeout_seconds=5.0)
+            if price is None:
+                failed += 1
+                continue
+            inserted = await record_market_price_snapshot(
+                board_card_id=int(row["board_card_id"]),
+                card=card,
+                price=price,
+            )
+            refreshed += int(inserted)
+            newly_settled += len(
+                await settle_due_daily_picks(board_card_id=int(row["board_card_id"]), limit=500)
+            )
+            updated_at = price.price_updated_at
+            is_newer = bool(
+                updated_at is not None
+                and updated_at >= row["earliest_unsettled_at"]
+            )
+            newer += int(is_newer)
+            if inserted:
+                timestamp_key = updated_at.isoformat() if updated_at else "unknown"
+                await log_event(
+                    "daily_pick_price_refreshed",
+                    event_key=(
+                        f"daily-pick:refresh:{row['board_card_id']}:"
+                        f"{timestamp_key}"
+                    ),
+                    metadata={
+                        "board_card_id": row["board_card_id"],
+                        "pending_pick_count": row["pending_pick_count"],
+                        "price_status": price.status,
+                        "price_source": price.source,
+                        "newer_than_settlement": is_newer,
+                    },
+                )
+        except RenaissAPICooldown as exc:
+            failed += len(due_cards) - index
+            batch_status = "rate_limited"
+            retry_after_seconds = exc.retry_after_seconds
+            logger.warning(
+                "Daily Pick refresh stopped by shared Partner API cooldown: %ss.",
+                retry_after_seconds,
+            )
+            break
+        except aiohttp.ClientResponseError as exc:
+            failed += 1
+            if exc.status == 429:
+                batch_status = "rate_limited"
+                failed += len(due_cards) - index - 1
+                retry_after = exc.headers.get("Retry-After") if exc.headers else None
+                retry_after_seconds = (
+                    _http_retry_after_seconds(retry_after)
+                    or _daily_pick_refresh_seconds()
+                )
+                logger.error(
+                    "Daily Pick refresh rate-limited; stopping batch. retry_after=%s",
+                    retry_after or "unknown",
+                )
+                break
+            logger.warning(
+                "Daily Pick API response failed board_card_id=%s status=%s: %s",
+                row.get("board_card_id"),
+                exc.status,
+                exc,
+            )
+        except Exception as exc:
+            failed += 1
+            logger.warning(
+                "Daily Pick price refresh failed board_card_id=%s: %s",
+                row.get("board_card_id"),
+                exc,
+            )
+    await release_market_refresh_leases(
+        worker_token=worker_token,
+        status=batch_status if failed == 0 else f"{batch_status}_with_failures",
+    )
+    newly_settled += len(await settle_due_daily_picks(limit=500))
+    logger.info(
+        "Daily Pick refresh done: due=%s inserted=%s newer=%s failed=%s "
+        "recovered_settled=%s newly_settled=%s.",
+        len(due_cards),
+        refreshed,
+        newer,
+        failed,
+        len(recovered),
+        newly_settled,
+    )
+    final_status = batch_status if failed == 0 else f"{batch_status}_with_failures"
+    return final_status, retry_after_seconds
+
+
+def _retry_after_seconds(exc: RetryAfter) -> int:
+    value = exc.retry_after
+    try:
+        seconds = value.total_seconds() if isinstance(value, timedelta) else float(value)
+        return min(MAX_REFRESH_INTERVAL_SECONDS, max(1, int(seconds)))
+    except (TypeError, ValueError, OverflowError):
+        return RESULT_BELL_POLL_SECONDS
+
+
+async def publish_daily_pick_result_bell_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Publish at most one privacy-safe, fully settled community result bell."""
+    now = datetime.now(timezone.utc)
+    if not _result_bell_window_open(now):
+        return
+    chat_id = official_chat_id()
+    if chat_id is None:
+        return
+    bell_date = now.astimezone(KST).date()
+    cohort = await get_latest_complete_result_cohort(
+        chat_id=chat_id,
+        before_date=bell_date,
+        oldest_date=bell_date - timedelta(days=2),
+        as_of=now,
+    )
+    if cohort is not None:
+        message_text, metrics, suppression_reason = build_daily_pick_result_bell(cohort)
+        created = await enqueue_daily_pick_result_bell(
+            chat_id=chat_id,
+            bell_date=bell_date,
+            cohort_pick_date=cohort["pick_date"],
+            message_text=message_text,
+            metrics=metrics,
+            suppression_reason=suppression_reason,
+            available_at=now,
+        )
+        if created and suppression_reason:
+            await log_event(
+                "daily_pick_result_privacy_limited",
+                event_key=f"{created['event_key']}:privacy-limited",
+                chat_id=chat_id,
+                metadata={
+                    "cohort_pick_date": cohort["pick_date"],
+                    "reason": suppression_reason,
+                    "participant_count": cohort["participant_count"],
+                },
+            )
+
+    attempt_token = secrets.token_hex(16)
+    claimed = await claim_daily_pick_result_bell(
+        chat_id=chat_id,
+        bell_date=bell_date,
+        attempt_token=attempt_token,
+        lease_owner=f"renaiss-bot:{os.getpid()}",
+    )
+    if claimed is None:
+        return
+    username = getattr(context.bot, "username", None)
+    reply_markup = None
+    if username and daily_pick_enabled():
+        reply_markup = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("Choose Today's Pick", url=f"https://t.me/{username}?start=market")]]
+        )
+    inflight = await begin_daily_pick_result_bell_delivery(
+        outbox_id=int(claimed["id"]),
+        attempt_token=attempt_token,
+    )
+    if inflight is None:
+        return
+    delivery_chat_id = int(inflight["chat_id"])
+    if delivery_chat_id != chat_id:
+        await mark_daily_pick_result_bell_failed(
+            outbox_id=int(inflight["id"]),
+            attempt_token=attempt_token,
+            state="dead",
+            error_code="chat_id_mismatch",
+            error="claimed result bell does not belong to the configured official chat",
+        )
+        logger.error(
+            "Result Bell blocked because claimed chat_id=%s differs from configured chat_id=%s.",
+            delivery_chat_id,
+            chat_id,
+        )
+        return
+    try:
+        message = await context.bot.send_message(
+            chat_id=delivery_chat_id,
+            text=str(inflight["message_text"]),
+            parse_mode="HTML",
+            reply_markup=reply_markup,
+        )
+    except RetryAfter as exc:
+        retry_seconds = _retry_after_seconds(exc)
+        retry_at = datetime.now(timezone.utc) + timedelta(seconds=retry_seconds)
+        await mark_daily_pick_result_bell_failed(
+            outbox_id=int(inflight["id"]),
+            attempt_token=attempt_token,
+            state="retryable",
+            error_code="telegram_retry_after",
+            error=str(exc),
+            next_attempt_at=retry_at,
+        )
+        return
+    except (BadRequest, Forbidden) as exc:
+        await mark_daily_pick_result_bell_failed(
+            outbox_id=int(inflight["id"]),
+            attempt_token=attempt_token,
+            state="dead",
+            error_code=type(exc).__name__,
+            error=str(exc),
+        )
+        return
+    except (TimedOut, NetworkError) as exc:
+        await mark_daily_pick_result_bell_failed(
+            outbox_id=int(inflight["id"]),
+            attempt_token=attempt_token,
+            state="delivery_unknown",
+            error_code=type(exc).__name__,
+            error=str(exc),
+        )
+        return
+    except Exception as exc:
+        await mark_daily_pick_result_bell_failed(
+            outbox_id=int(inflight["id"]),
+            attempt_token=attempt_token,
+            state="delivery_unknown",
+            error_code=type(exc).__name__,
+            error=str(exc),
+        )
+        return
+
+    marked_sent = await mark_daily_pick_result_bell_sent(
+        outbox_id=int(inflight["id"]),
+        attempt_token=attempt_token,
+        telegram_message_id=int(message.message_id),
+    )
+    if not marked_sent:
+        logger.error(
+            "Result Bell delivered but DB acknowledgement failed outbox_id=%s; "
+            "automatic retry remains disabled by inflight recovery.",
+            inflight["id"],
+        )
+        return
+    await log_event(
+        "daily_pick_result_published",
+        event_key=str(inflight["event_key"]),
+        chat_id=chat_id,
+        metadata={
+            "cohort_pick_date": inflight["cohort_pick_date"],
+            "telegram_message_id": message.message_id,
+        },
+    )
+
+
+async def _edit_recovered_prompt(application, *, chat_id: int, message_id: int, text: str) -> None:
+    """Close a prompt from a previous process; it may be a text or a photo message."""
+    try:
+        await application.bot.edit_message_text(
+            chat_id=chat_id,
+            message_id=message_id,
+            text=text,
+            parse_mode="HTML",
+            reply_markup=None,
+        )
+    except BadRequest as exc:
+        if "no text in the message" not in str(exc).lower():
+            raise
+        await application.bot.edit_message_caption(
+            chat_id=chat_id,
+            message_id=message_id,
+            caption=text,
+            parse_mode="HTML",
+            reply_markup=None,
+        )
+
+
+async def resume_open_spawn_sessions(application: Application) -> int:
+    """TGPoke식 라이브 세션 테이블에서 진행 중 라운드를 우선 복원한다."""
+    from renaiss_bot.handlers.spawn import (
+        _active as live_rounds,
+        _lock as round_lock,
+        _resolve_job,
+        rebuild_active_spawn,
+    )
+
+    try:
+        sessions = await list_open_spawn_sessions()
+    except Exception as exc:
+        logger.warning("Open spawn session scan failed: %s", exc)
+        return 0
+    resumed = 0
+    for session in sessions:
+        chat_id = int(session["chat_id"])
+        metadata = {
+            "local_card_id": session["local_card_id"],
+            "message_id": session["message_id"],
+            "band": session["band"],
+            "market_usd": session["market_usd"],
+            "price_options": session["price_options"],
+            "correct_price_index": session["correct_price_index"],
+            "guess_capable": session["guess_capable"],
+            "variant": session["variant"],
+            "prompt_is_photo": session["prompt_is_photo"],
+        }
+        try:
+            rebuilt = await rebuild_active_spawn(
+                session_id=str(session["session_token"]),
+                chat_id=chat_id,
+                metadata=metadata,
+                catchers=session["catchers"],
+                guesses=session["guesses"],
+            )
+        except Exception as exc:
+            logger.warning(
+                "Live session rebuild failed session=%s: %s",
+                session["session_token"],
+                exc,
+            )
+            rebuilt = None
+        if rebuilt is None:
+            try:
+                await close_spawn_session(
+                    session_token=str(session["session_token"]), state="cancelled"
+                )
+            except Exception:
+                pass
+            continue
+        closes_at = session["closes_at"]
+        remaining = 1.0
+        if closes_at is not None:
+            if closes_at.tzinfo is None:
+                closes_at = closes_at.replace(tzinfo=timezone.utc)
+            remaining = max(
+                1.0, (closes_at - datetime.now(timezone.utc)).total_seconds()
+            )
+        registered = False
+        async with round_lock(chat_id):
+            if live_rounds.get(chat_id) is None:
+                live_rounds[chat_id] = rebuilt
+                registered = True
+        if registered:
+            application.job_queue.run_once(
+                _resolve_job,
+                when=remaining,
+                data=chat_id,
+                name=f"renaiss_spawn_resolve_{chat_id}_{session['message_id']}",
+                job_kwargs={"misfire_grace_time": None},
+            )
+            logger.info(
+                "Live spawn session resumed session=%s remaining=%.0fs catchers=%s",
+                session["session_token"],
+                remaining,
+                len(session["catchers"]),
+            )
+            resumed += 1
+    return resumed
+
+
+async def recover_unfinished_spawns(application: Application, *, page_size: int = 50) -> int:
+    """Close every orphaned prompt, failing readiness if any remain ambiguous."""
+    after_id = 0
+    recovered = 0
+    failures: list[str] = []
+    while True:
+        rows = await list_unfinished_spawns(limit=page_size, after_id=after_id)
+        if not rows:
+            break
+        for row in rows:
+            posted_event_id = int(row.get("posted_event_id") or 0)
+            after_id = max(after_id, posted_event_id)
+            if posted_event_id <= 0:
+                failures.append(str(row.get("session_id") or "missing-event-id"))
+                continue
+            metadata = row.get("metadata") or {}
+            message_id = metadata.get("message_id")
+            chat_id = row.get("chat_id")
+            session_id = row.get("session_id")
+            if not message_id or not chat_id or not session_id:
+                failures.append(str(session_id or posted_event_id))
+                continue
+            award_user_id = row.get("award_user_id")
+            award_metadata = row.get("award_metadata") or {}
+            if award_user_id is not None:
+                winner_name = escape(str(award_metadata.get("winner_name") or "the winner"))
+                card_name = escape(str(award_metadata.get("card_name") or "The card"))
+                try:
+                    await _edit_recovered_prompt(
+                        application,
+                        chat_id=int(chat_id),
+                        message_id=int(message_id),
+                        text=(
+                            "✅ <b>Spawn recovered after a bot restart.</b>\n"
+                            f"{card_name} was already awarded to <b>{winner_name}</b> "
+                            "and remains in their collection."
+                        ),
+                    )
+                except Exception as exc:
+                    logger.info(
+                        "Awarded spawn recovery skipped session=%s: %s",
+                        session_id,
+                        exc,
+                    )
+                    failures.append(str(session_id))
+                    continue
+                terminal_logged = await log_event(
+                    "spawn_revealed",
+                    event_key=f"spawn:{session_id}:recovered",
+                    user_id=int(award_user_id),
+                    chat_id=int(chat_id),
+                    session_id=str(session_id),
+                    metadata={
+                        "reason": "bot_restart_after_award",
+                        "message_id": message_id,
+                        "award_recovered": True,
+                    },
+                )
+                if terminal_logged:
+                    recovered += 1
+                else:
+                    failures.append(str(session_id))
+                continue
+            # ── 이어하기: 원장으로 라운드를 복원해 남은 시간만큼 계속 진행한다.
+            resumed = False
+            try:
+                from renaiss_bot.handlers.spawn import (
+                    _active as live_rounds,
+                    _lock as round_lock,
+                    _resolve_job,
+                    rebuild_active_spawn,
+                )
+
+                # 라이브 세션 테이블 경로가 이미 같은 라운드를 복원했다면
+                # 여기서 다시 닫지 않는다.
+                existing = live_rounds.get(int(chat_id))
+                if existing is not None and existing.token == str(session_id):
+                    recovered += 1
+                    continue
+
+                entries = await list_spawn_round_entries(str(session_id))
+                rebuilt = await rebuild_active_spawn(
+                    session_id=str(session_id),
+                    chat_id=int(chat_id),
+                    metadata=metadata,
+                    catchers=entries["catchers"],
+                    guesses=entries["guesses"],
+                )
+                if rebuilt is not None:
+                    closes_raw = str(metadata.get("closes_at") or "")
+                    try:
+                        closes_at = datetime.fromisoformat(closes_raw.replace("Z", "+00:00"))
+                    except ValueError:
+                        closes_at = None
+                    remaining = 1.0
+                    if closes_at is not None:
+                        remaining = max(
+                            1.0,
+                            (closes_at - datetime.now(timezone.utc)).total_seconds(),
+                        )
+                    async with round_lock(int(chat_id)):
+                        if live_rounds.get(int(chat_id)) is None:
+                            live_rounds[int(chat_id)] = rebuilt
+                            resumed = True
+                    if resumed:
+                        application.job_queue.run_once(
+                            _resolve_job,
+                            when=remaining,
+                            data=int(chat_id),
+                            name=f"renaiss_spawn_resolve_{chat_id}_{message_id}",
+                            job_kwargs={"misfire_grace_time": None},
+                        )
+                        logger.info(
+                            "Spawn round resumed after restart session=%s remaining=%.0fs catchers=%s",
+                            session_id,
+                            remaining,
+                            len(entries["catchers"]),
+                        )
+                        recovered += 1
+                        continue
+            except Exception as exc:
+                logger.warning("Spawn round resume failed session=%s: %s", session_id, exc)
+
+            prompt_closed = False
+            try:
+                await _edit_recovered_prompt(
+                    application,
+                    chat_id=int(chat_id),
+                    message_id=int(message_id),
+                    text=(
+                        "ℹ️ <b>Spawn round closed after a bot restart.</b>\n"
+                        "No collection award was recorded for this round. "
+                        "No Daily Pick penalty was applied."
+                    ),
+                )
+                prompt_closed = True
+            except BadRequest as exc:
+                # Telegram's definitive rejection means there is no actionable
+                # open prompt left for this bot (deleted/already closed/etc.).
+                prompt_closed = True
+                logger.info("Orphaned spawn prompt is already closed session=%s: %s", session_id, exc)
+            except Exception as exc:
+                logger.info("Orphaned spawn prompt close skipped session=%s: %s", session_id, exc)
+            recovery_event = "spawn_cancelled" if prompt_closed else "spawn_recovery_close_failed"
+            recovery_suffix = "cancelled" if prompt_closed else "recovery-close-failed"
+            terminal_logged = await log_event(
+                recovery_event,
+                event_key=f"spawn:{session_id}:{recovery_suffix}",
+                chat_id=int(chat_id),
+                session_id=str(session_id),
+                metadata={
+                    "reason": "bot_restart",
+                    "message_id": message_id,
+                    "prompt_closed": prompt_closed,
+                },
+            )
+            if prompt_closed and terminal_logged:
+                recovered += 1
+            else:
+                failures.append(str(session_id))
+        if len(rows) < page_size:
+            break
+    if failures:
+        sample = ", ".join(failures[:5])
+        raise RuntimeError(
+            f"spawn recovery incomplete: {len(failures)} unresolved prompt(s): {sample}"
+        )
+    return recovered
+
+
+def ranking_announce_enabled() -> bool:
+    return os.getenv("RENAISS_RANKING_ANNOUNCE_ENABLED", "1").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+    }
+
+
+def build_ranking_message(ranking: dict, *, title: str, footer: str | None = None) -> str:
+    lines = [f"{icon('gotcha')} <b>{escape(title)}</b>"]
+    for row in ranking.get("rows", [])[:5]:
+        rank = int(row.get("rank") or 0)
+        marker = _RANK_MEDALS[rank - 1] if 1 <= rank <= 3 else f" {rank}."
+        name = escape(str(row.get("winner_name") or "Collector"))
+        catches = int(row.get("catches") or 0)
+        plural = "es" if catches != 1 else ""
+        lines.append(f"{marker} <b>{name}</b> — {catches} catch{plural}")
+    best = ranking.get("best_catch")
+    if best:
+        lines.append(
+            f"{icon('crystal')} Top catch: <b>{escape(str(best.get('card_name') or '-'))}</b>"
+            f" · {icon('coin')} <b>${float(best.get('fmv_usd') or 0):,.0f}</b>"
+            f" · {escape(str(best.get('winner_name') or 'Collector'))}"
+        )
+    if footer:
+        lines.append(f"<i>{escape(footer)}</i>")
+    return "\n".join(lines)
+
+
+async def announce_daily_ranking_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """22:00 KST — post today's catch ranking; Mondays add last week's final."""
+    if not ranking_announce_enabled():
+        return
+    chat_id = official_chat_id()
+    if chat_id is None:
+        logger.info("Ranking announce skipped: official chat is not configured.")
+        return
+    now_kst = datetime.now(KST)
+    today = now_kst.date().isoformat()
+
+    try:
+        daily = await get_catch_ranking(period="day", limit=5)
+    except Exception as exc:
+        logger.warning("Daily ranking query failed: %s", exc)
+        return
+    if daily["rows"]:
+        claimed = await log_event(
+            "daily_rank_posted",
+            event_key=f"daily-rank:{chat_id}:{today}",
+            chat_id=chat_id,
+            metadata={"rows": len(daily["rows"]), "total": daily["total_catches"]},
+        )
+        if claimed:
+            await context.bot.send_message(
+                chat_id,
+                build_ranking_message(
+                    daily,
+                    title=f"Daily Catch Ranking · {now_kst.strftime('%b %d')} (KST)",
+                    footer=(
+                        "Spawns and commands are paused for the ceremony — "
+                        f"the room reopens at 22:{ceremony_minutes():02d} KST."
+                    ),
+                ),
+                parse_mode="HTML",
+            )
+    else:
+        logger.info("Daily ranking skipped: no catches today.")
+
+    if now_kst.weekday() == 0:  # Monday — last week's final
+        try:
+            weekly = await get_catch_ranking(period="last_week", limit=10)
+        except Exception as exc:
+            logger.warning("Weekly ranking query failed: %s", exc)
+            return
+        if not weekly["rows"]:
+            return
+        week_key = (now_kst - timedelta(days=7)).strftime("%G-W%V")
+        claimed = await log_event(
+            "weekly_rank_posted",
+            event_key=f"weekly-rank:{chat_id}:{week_key}",
+            chat_id=chat_id,
+            metadata={"rows": len(weekly["rows"]), "total": weekly["total_catches"]},
+        )
+        if claimed:
+            await context.bot.send_message(
+                chat_id,
+                build_ranking_message(
+                    weekly,
+                    title=f"Weekly Final · {week_key}",
+                    footer="Last week's board is settled. Congrats, collectors!",
+                ),
+                parse_mode="HTML",
+            )
 
 
 def register_jobs(application: Application) -> None:
     job_queue = application.job_queue
     if job_queue is None:
-        logger.warning("JobQueue unavailable; Renaiss scheduled jobs skipped.")
-        return
+        raise RuntimeError(
+            "Telegram JobQueue is required for Renaiss scheduled jobs; "
+            "startup cannot continue."
+        )
 
     job_queue.run_daily(
-        snapshot_portfolios_job,
-        time=DAILY_SNAPSHOT_TIME_KST,
-        name="renaiss_portfolio_snapshot",
+        cleanup_tracking_links_job,
+        time=TRACKING_CLEANUP_TIME_KST,
+        name="renaiss_referral_link_cleanup",
         job_kwargs={"misfire_grace_time": None},
     )
 
-    if quiz_chat_id() is not None:
+    for refresh_time in CATALOG_REFRESH_TIMES_KST:
         job_queue.run_daily(
-            post_daily_quiz,
-            time=DAILY_QUIZ_TIME_KST,
-            name="renaiss_daily_quiz",
+            refresh_catalog_prices_job,
+            time=refresh_time,
+            name=f"renaiss_catalog_price_refresh_{refresh_time.hour:02d}",
             job_kwargs={"misfire_grace_time": None},
         )
-        logger.info("Daily quiz scheduled at 21:00 KST.")
-    else:
-        logger.info("Daily quiz not scheduled: RENAISS_QUIZ_CHAT_ID not set.")
+    logger.info("Catalog DB cache refresh scheduled at 03:00 and 15:00 KST.")
 
-    # 공식방 상시 스폰 (시즌1 아케이드): 1분 간격
+    job_queue.run_daily(
+        announce_daily_ranking_job,
+        time=RANKING_ANNOUNCE_TIME_KST,
+        name="renaiss_daily_ranking_announce",
+        job_kwargs={"misfire_grace_time": None},
+    )
+    logger.info("Daily catch ranking announce scheduled at 22:00 KST (weekly final on Mondays).")
+
+    # Admission can close instantly, but existing T+24 picks and outbox rows are
+    # obligations. Drain workers therefore run whenever the DB-backed bot runs.
+    job_queue.run_repeating(
+        refresh_daily_pick_prices_job,
+        interval=_daily_pick_refresh_seconds(),
+        first=120,
+        name="renaiss_daily_pick_price_refresh",
+        job_kwargs={"misfire_grace_time": None},
+    )
+    job_queue.run_repeating(
+        publish_daily_pick_result_bell_job,
+        interval=RESULT_BELL_POLL_SECONDS,
+        first=30,
+        name="renaiss_daily_pick_result_bell",
+        job_kwargs={"misfire_grace_time": None},
+    )
+    logger.info(
+        "Daily Pick obligation drain scheduled; refresh cadence=%ss.",
+        _daily_pick_refresh_seconds(),
+    )
+    if daily_pick_enabled():
+        logger.info("Daily Pick admission is open.")
+    elif daily_pick_requested():
+        issues = daily_pick_configuration_issues()
+        detail = "; ".join(issues) if issues else "live Partner/admin preflight did not pass"
+        logger.error("Daily Pick admission stays closed: %s.", detail)
+    else:
+        logger.info("Daily Pick closed: RENAISS_DAILY_PICK_ENABLED is not set.")
+
+    # 공식방 스폰: 무인 기본값은 그룹 노이즈를 줄인 2~4시간 가변 간격.
     if official_chat_id() is not None:
-        job_queue.run_repeating(
-            spawn_tick,
-            interval=SPAWN_INTERVAL_SECONDS,
-            first=SPAWN_INTERVAL_SECONDS,
+        minimum, maximum = spawn_interval_bounds()
+        job_queue.run_once(
+            restore_spawn_burst_job,
+            when=0,
+            name="renaiss_spawn_burst_restore",
+            job_kwargs={"misfire_grace_time": None},
+        )
+        job_queue.run_once(
+            spawn_loop_job,
+            when=first_spawn_delay(),
             name="renaiss_official_spawn",
             job_kwargs={"misfire_grace_time": None},
         )
-        logger.info("Official-room spawn scheduled every %ss.", SPAWN_INTERVAL_SECONDS)
+        logger.info(
+            "Official-room first spawn in %ss; later cadence %s-%ss.",
+            first_spawn_delay(),
+            minimum,
+            maximum,
+        )
     else:
         logger.info("Official spawn not scheduled: RENAISS_OFFICIAL_CHAT_ID/QUIZ_CHAT_ID not set.")

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import random
 from collections.abc import Iterable, Mapping
@@ -22,6 +23,14 @@ from renaiss_bot.services.pack_rules import (
 )
 
 logger = logging.getLogger(__name__)
+
+_RENAISS_VARIATION_BY_GAME_GRADE = {
+    "RR": "Double Rare",
+    "AR": "Illustration Rare",
+    "SR": "Ultra Rare",
+    "SAR": "Special Art Rare",
+    "UR": "Hyper Rare",
+}
 
 _PRICE_KEYS = (
     "psa10_market_usd",
@@ -52,10 +61,11 @@ def _metadata(value: Any) -> dict[str, Any]:
 
 def _float_or_none(value: Any) -> float | None:
     try:
-        if value is None or value == "":
+        if value is None or value == "" or isinstance(value, bool):
             return None
-        return float(value)
-    except (TypeError, ValueError):
+        number = float(value)
+        return number if math.isfinite(number) and number > 0 else None
+    except (TypeError, ValueError, OverflowError):
         return None
 
 
@@ -83,12 +93,57 @@ def _card_name(row: Mapping[str, Any]) -> str:
     return str(meta.get("en_name") or row.get("species_name") or row.get("card_name") or "Unknown Card")
 
 
+def _canonical_collector_number(set_code: str, collector_number: str) -> str:
+    """Convert provider ids such as ``sv7-160`` to Renaiss item_no ``160``."""
+    code = set_code.strip()
+    number = collector_number.strip()
+    prefix = f"{code}-"
+    if code and number.casefold().startswith(prefix.casefold()):
+        suffix = number[len(prefix) :].strip()
+        if suffix:
+            return suffix
+    return number
+
+
+def _market_identity_metadata(
+    metadata: Mapping[str, Any],
+    *,
+    category: str,
+    game_grade: str,
+    original_collector_number: str,
+    canonical_collector_number: str,
+) -> dict[str, Any]:
+    """Separate the in-game rarity from the official Renaiss market identity."""
+    enriched = dict(metadata)
+    if original_collector_number != canonical_collector_number:
+        enriched.setdefault("source_collector_number", original_collector_number)
+    if category == "pokemon_tcg":
+        if not str(enriched.get("variation") or enriched.get("variant") or "").strip():
+            variation = _RENAISS_VARIATION_BY_GAME_GRADE.get(game_grade)
+            if variation:
+                enriched["variation"] = variation
+        if not str(enriched.get("market_grade") or "").strip():
+            enriched["market_grade"] = (
+                os.getenv("RENAISS_API_DEFAULT_MARKET_GRADE", "PSA 10 Gem Mint").strip()
+                or "PSA 10 Gem Mint"
+            )
+    return enriched
+
+
 def _row_to_card(row: Mapping[str, Any], *, category: str = "pokemon_tcg") -> CardIdentity:
     meta = _metadata(row.get("metadata"))
     card_name = _card_name(row)
     grade = normalize_grade(str(row.get("grade") or meta.get("grade") or "R"))
     set_code = str(row.get("series_code") or meta.get("set_id") or meta.get("series") or "")
-    collector_number = _number_from_metadata(meta, str(row.get("illustration_id") or ""))
+    source_collector_number = _number_from_metadata(meta, str(row.get("illustration_id") or ""))
+    collector_number = _canonical_collector_number(set_code, source_collector_number)
+    meta = _market_identity_metadata(
+        meta,
+        category=category,
+        game_grade=grade,
+        original_collector_number=source_collector_number,
+        canonical_collector_number=collector_number,
+    )
     image_url = row.get("image_url") or meta.get("display_image_url") or meta.get("pokard_image_url")
     return CardIdentity(
         category=category,
@@ -170,29 +225,69 @@ def _sample_one_piece_cards() -> list[CardIdentity]:
 
 
 def sample_cards(category: str) -> list[CardIdentity]:
+    if category == "pokemon_tcg":
+        return _sample_pokemon_cards()
     if category == "one_piece_tcg":
         return _sample_one_piece_cards()
-    return _sample_pokemon_cards()
+    return []
 
 
-def _catalog_row_to_card(row: Mapping[str, Any]) -> CardIdentity:
+def catalog_row_to_card(row: Mapping[str, Any]) -> CardIdentity:
     meta = _metadata(row.get("metadata"))
+    category = str(row.get("category") or "other_renaiss_cards")
+    grade = normalize_grade(str(row.get("grade") or meta.get("grade") or "R"))
+    set_code = str(row.get("set_code") or meta.get("set_code") or "")
+    source_collector_number = str(
+        row.get("collector_number") or meta.get("collector_number") or ""
+    )
+    collector_number = _canonical_collector_number(set_code, source_collector_number)
+    meta = _market_identity_metadata(
+        meta,
+        category=category,
+        game_grade=grade,
+        original_collector_number=source_collector_number,
+        canonical_collector_number=collector_number,
+    )
     price = _float_or_none(row.get("market_price_usd")) or _extract_price_usd(meta)
     return CardIdentity(
-        category=str(row.get("category") or "other_renaiss_cards"),
+        category=category,
         local_card_id=str(row.get("local_card_id") or ""),
         card_name=str(row.get("card_name") or "Unknown Card"),
-        set_code=str(row.get("set_code") or meta.get("set_code") or ""),
+        set_code=set_code,
         set_name=str(row.get("set_name") or meta.get("set_name") or ""),
-        collector_number=str(row.get("collector_number") or meta.get("collector_number") or ""),
+        collector_number=collector_number,
         language=str(row.get("language") or meta.get("language") or "Japanese"),
         rarity=str(row.get("rarity") or meta.get("rarity") or row.get("grade") or "R"),
-        grade=normalize_grade(str(row.get("grade") or meta.get("grade") or "R")),
+        grade=grade,
         image_url=str(row.get("image_url") or meta.get("image_url") or "") or None,
         already_owned=bool(row.get("already_owned")),
         market_price_usd=price,
         metadata=meta,
     )
+
+
+async def load_catalog_card(local_card_id: str) -> CardIdentity | None:
+    """재시작 복원용: 카탈로그 한 장을 id로 읽어 CardIdentity로 만든다."""
+    if not local_card_id or not os.getenv("DATABASE_URL"):
+        return None
+    try:
+        pool = await get_db()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT local_card_id, category, card_name, grade, set_code, set_name,
+                       collector_number, rarity, language, image_url,
+                       market_price_usd, metadata
+                FROM renaiss_catalog_cards
+                WHERE local_card_id = $1
+                """,
+                local_card_id,
+            )
+    except Exception:
+        return None
+    if row is None:
+        return None
+    return catalog_row_to_card(dict(row))
 
 
 async def _load_catalog_pool(user_id: int | None, category: str) -> tuple[list[CardIdentity], str] | None:
@@ -237,6 +332,9 @@ async def _load_catalog_pool(user_id: int | None, category: str) -> tuple[list[C
                 WHERE category = $1
                   AND is_active = TRUE
                   AND grade = ANY($2::text[])
+                  -- 블라인드 "마켓" 스폰은 숨길 가격이 있어야 한다. 가격이 비면
+                  -- (예: 검증 갱신 전 seed) 갱신이 채울 때까지 풀에서 제외한다.
+                  AND market_price_usd > 0
                 ORDER BY grade DESC, card_name ASC
                 LIMIT 5000
                 """,
@@ -247,7 +345,7 @@ async def _load_catalog_pool(user_id: int | None, category: str) -> tuple[list[C
         for row in rows:
             payload = dict(row)
             payload["already_owned"] = str(payload.get("local_card_id") or "") in owned_ids
-            cards.append(_catalog_row_to_card(payload))
+            cards.append(catalog_row_to_card(payload))
         if len(cards) >= CARDS_PER_PACK:
             return cards, "renaiss_catalog"
     except Exception as exc:
@@ -260,12 +358,12 @@ async def load_card_pool(user_id: int | None, category: str) -> tuple[list[CardI
     if catalog is not None:
         return catalog
 
-    if category != "pokemon_tcg":
-        return sample_cards(category), "sample"
     if os.getenv("RENAISS_SKIP_DB", "").strip().lower() in {"1", "true", "yes"}:
         return sample_cards(category), "sample"
     if not os.getenv("DATABASE_URL"):
         return sample_cards(category), "sample"
+    if category != "pokemon_tcg":
+        return [], "unavailable"
 
     try:
         pool = await get_db()
@@ -318,7 +416,7 @@ async def load_card_pool(user_id: int | None, category: str) -> tuple[list[CardI
     except Exception as exc:
         logger.info("Renaiss card pool DB load skipped: %s", exc)
 
-    return sample_cards(category), "sample"
+    return [], "unavailable"
 
 
 def _weighted_pick(candidates: Iterable[CardIdentity], used_ids: set[str], used_species: set[int]) -> CardIdentity | None:
@@ -331,11 +429,13 @@ def _weighted_pick(candidates: Iterable[CardIdentity], used_ids: set[str], used_
         if card.species_id is None or card.species_id not in used_species
     ]
     weighted = preferred or available
-    weights = [
-        (1.0 if not card.already_owned else 0.5)
-        * (1.0 + min(float(card.market_price_usd or 0), 500.0) / 2000.0)
-        for card in weighted
-    ]
+    weights = []
+    for card in weighted:
+        price = _float_or_none(card.market_price_usd) or 0.0
+        weight = (1.0 if not card.already_owned else 0.5) * (
+            1.0 + min(price, 500.0) / 2000.0
+        )
+        weights.append(max(0.01, weight))
     return random.choices(weighted, weights=weights, k=1)[0]
 
 
@@ -349,6 +449,9 @@ def pick_card_for_grade(pool: list[CardIdentity], grade: str, used_ids: set[str]
 
 
 def build_pack(pool: list[CardIdentity], category: str, pack_type: str) -> tuple[list[CardIdentity], str]:
+    if not pool:
+        raise ValueError(f"card pool is unavailable for {category}")
+    pack_pool = pool
     used_ids: set[str] = set()
     used_species: set[int] = set()
     cards: list[CardIdentity] = []
@@ -359,7 +462,11 @@ def build_pack(pool: list[CardIdentity], category: str, pack_type: str) -> tuple
         if grade == "LUCKY":
             grade = select_lucky_grade(pack_type)
             lucky_grade = grade
-        selected = pick_card_for_grade(pool, grade, used_ids, used_species)
+        selected = pick_card_for_grade(pack_pool, grade, used_ids, used_species)
+        if selected is None:
+            # A small pilot catalog may not contain ten unique cards. Fill the
+            # promised slot count with a repeat instead of silently shrinking a pack.
+            selected = _weighted_pick(pack_pool, set(), set())
         if selected is None:
             continue
         used_ids.add(selected.local_card_id)
@@ -368,8 +475,7 @@ def build_pack(pool: list[CardIdentity], category: str, pack_type: str) -> tuple
         cards.append(selected)
 
     if not cards:
-        fallback = sample_cards(category)
-        cards = fallback[:CARDS_PER_PACK]
+        cards = sample_cards(category)[:CARDS_PER_PACK]
     return cards, lucky_grade
 
 

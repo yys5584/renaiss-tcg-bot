@@ -5,7 +5,8 @@ from __future__ import annotations
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from renaiss_bot.handlers.cardpack import cmd_mycards, cmd_open, cmd_rank
+from renaiss_bot.handlers.cardpack import cmd_mycards, cmd_open
+from renaiss_bot.handlers.market import cmd_market
 from renaiss_bot.handlers.start import cmd_sets
 from renaiss_bot.services.categories import resolve_category_key
 
@@ -28,4 +29,5 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     elif data == "renaiss:mycards":
         await cmd_mycards(update, context)
     elif data == "renaiss:rank":
-        await cmd_rank(update, context)
+        # 이미 발송된 과거 버튼도 동일 후보의 주간 마켓으로 안전하게 이동한다.
+        await cmd_market(update, context)

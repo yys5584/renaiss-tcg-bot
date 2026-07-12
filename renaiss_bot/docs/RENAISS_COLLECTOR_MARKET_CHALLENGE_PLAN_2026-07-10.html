@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <title>Renaiss Collector Market Challenge — 실행 기획서 v2</title>
+  <style>
+    :root {
+      --bg: #0f1019;
+      --surface: #161822;
+      --surface-2: #1e2030;
+      --surface-3: #252840;
+      --glass: rgba(255,255,255,.06);
+      --border: rgba(255,255,255,.09);
+      --border-strong: rgba(255,255,255,.16);
+      --text: #e8e8f0;
+      --muted: #9ca3af;
+      --dim: #667085;
+      --green: #35d49a;
+      --green-dark: #1d9e75;
+      --yellow: #ffcb05;
+      --red: #e53935;
+      --blue: #42a5f5;
+      --orange: #ffa726;
+      --purple: #a875ff;
+      --max: 1180px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 82% 4%, rgba(29,158,117,.18), transparent 28rem),
+        radial-gradient(circle at 8% 32%, rgba(123,31,162,.15), transparent 32rem),
+        var(--bg);
+      font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 15px;
+      line-height: 1.7;
+      word-break: keep-all;
+    }
+
+    a { color: #7ddfc1; text-decoration: none; }
+    a:hover { color: #b1f4df; }
+    strong { color: #fff; }
+    code {
+      padding: 2px 7px;
+      color: #b1f4df;
+      background: rgba(53,212,154,.10);
+      border: 1px solid rgba(53,212,154,.16);
+      border-radius: 6px;
+      font-family: Consolas, "SFMono-Regular", monospace;
+      font-size: .9em;
+    }
+
+    .progress {
+      position: fixed;
+      inset: 0 auto auto 0;
+      width: 0;
+      height: 3px;
+      z-index: 200;
+      background: linear-gradient(90deg, var(--green), var(--yellow));
+      box-shadow: 0 0 16px rgba(53,212,154,.5);
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      border-bottom: 1px solid var(--border);
+      background: rgba(15,16,25,.86);
+      backdrop-filter: blur(16px);
+    }
+    .topbar-inner {
+      width: min(var(--max), calc(100% - 40px));
+      min-height: 64px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      letter-spacing: -.3px;
+    }
+    .brand-mark {
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(53,212,154,.35);
+      border-radius: 10px;
+      background: linear-gradient(145deg, rgba(53,212,154,.24), rgba(53,212,154,.04));
+      color: var(--green);
+      box-shadow: 0 0 22px rgba(53,212,154,.16);
+    }
+    .nav {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .nav::-webkit-scrollbar { display: none; }
+    .nav a {
+      padding: 8px 10px;
+      color: var(--muted);
+      border-radius: 8px;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .nav a:hover { color: var(--text); background: var(--glass); }
+    .print-btn {
+      min-height: 38px;
+      padding: 0 16px;
+      color: #07130f;
+      background: var(--green);
+      border: 0;
+      border-radius: 999px;
+      font-weight: 800;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    main { width: min(var(--max), calc(100% - 40px)); margin: 0 auto; }
+    .hero {
+      position: relative;
+      padding: 94px 0 66px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(300px, .65fr);
+      gap: 48px;
+      align-items: center;
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 18px;
+      padding: 7px 12px;
+      color: #b1f4df;
+      background: rgba(53,212,154,.09);
+      border: 1px solid rgba(53,212,154,.22);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .4px;
+      text-transform: uppercase;
+    }
+    h1 {
+      max-width: 800px;
+      margin: 0;
+      color: #fff;
+      font-size: clamp(42px, 6vw, 72px);
+      line-height: 1.03;
+      letter-spacing: -3px;
+    }
+    .hero-accent { color: var(--green); }
+    .lead {
+      max-width: 760px;
+      margin: 24px 0 0;
+      color: #c4c8d2;
+      font-size: 19px;
+      line-height: 1.7;
+    }
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 28px;
+    }
+    .chip {
+      padding: 6px 10px;
+      color: var(--muted);
+      background: var(--glass);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .north-star {
+      position: relative;
+      padding: 26px;
+      overflow: hidden;
+      background: linear-gradient(155deg, rgba(53,212,154,.16), rgba(30,32,48,.82));
+      border: 1px solid rgba(53,212,154,.3);
+      border-radius: 22px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.35);
+    }
+    .north-star::after {
+      content: "";
+      position: absolute;
+      width: 160px;
+      height: 160px;
+      right: -60px;
+      bottom: -70px;
+      background: radial-gradient(circle, rgba(255,203,5,.22), transparent 65%);
+    }
+    .north-label { color: var(--green); font-size: 12px; font-weight: 900; letter-spacing: 1px; }
+    .north-quote { margin: 12px 0 22px; font-size: 25px; line-height: 1.35; font-weight: 850; letter-spacing: -.7px; }
+    .north-rule { display: grid; gap: 9px; }
+    .north-rule div { display: flex; gap: 9px; color: #cdd2dc; font-size: 13px; }
+    .north-rule span { color: var(--yellow); }
+
+    section { padding: 42px 0 34px; scroll-margin-top: 78px; }
+    .section-head { max-width: 790px; margin-bottom: 24px; }
+    .kicker { color: var(--green); font-weight: 900; font-size: 12px; letter-spacing: 1.2px; text-transform: uppercase; }
+    h2 { margin: 7px 0 10px; color: #fff; font-size: clamp(28px, 4vw, 40px); line-height: 1.2; letter-spacing: -1.5px; }
+    h3 { margin: 0 0 9px; color: #fff; font-size: 18px; letter-spacing: -.35px; }
+    .section-desc { margin: 0; color: var(--muted); font-size: 16px; }
+
+    .verdict {
+      padding: 24px 26px;
+      background: linear-gradient(110deg, rgba(53,212,154,.13), rgba(66,165,245,.07));
+      border: 1px solid rgba(53,212,154,.28);
+      border-left: 5px solid var(--green);
+      border-radius: 14px;
+      font-size: 17px;
+    }
+    .verdict b { color: var(--green); }
+    .warn {
+      padding: 18px 20px;
+      background: rgba(255,167,38,.08);
+      border: 1px solid rgba(255,167,38,.22);
+      border-left: 4px solid var(--orange);
+      border-radius: 12px;
+      color: #e5d7c2;
+    }
+    .danger {
+      padding: 18px 20px;
+      background: rgba(229,57,53,.08);
+      border: 1px solid rgba(229,57,53,.22);
+      border-left: 4px solid var(--red);
+      border-radius: 12px;
+      color: #ead0d0;
+    }
+
+    .grid { display: grid; gap: 14px; }
+    .grid-2 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0,1fr)); }
+    .grid-4 { grid-template-columns: repeat(4, minmax(0,1fr)); }
+    .card {
+      padding: 20px;
+      background: rgba(255,255,255,.05);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: 0 8px 28px rgba(0,0,0,.18);
+    }
+    .card p { margin: 0; color: var(--muted); }
+    .card .icon {
+      width: 36px;
+      height: 36px;
+      margin-bottom: 14px;
+      display: grid;
+      place-items: center;
+      color: var(--green);
+      background: rgba(53,212,154,.10);
+      border: 1px solid rgba(53,212,154,.18);
+      border-radius: 10px;
+      font-size: 17px;
+    }
+    .metric { min-height: 154px; }
+    .metric .num {
+      margin: 8px 0 6px;
+      color: #fff;
+      font-family: Orbitron, Consolas, monospace;
+      font-size: 29px;
+      font-weight: 800;
+      letter-spacing: -1px;
+    }
+    .metric .label { color: var(--muted); font-size: 13px; }
+    .metric .note { margin-top: 12px; color: var(--dim); font-size: 12px; }
+
+    .scoreboard { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; }
+    .score {
+      padding: 18px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+    }
+    .score-label { color: var(--muted); font-size: 12px; }
+    .score-value { margin: 8px 0 2px; font-size: 27px; font-weight: 900; }
+    .score-now { color: var(--orange); }
+    .score-target { color: var(--green); }
+
+    .loop {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+      align-items: stretch;
+    }
+    .loop-step {
+      position: relative;
+      min-height: 164px;
+      padding: 19px 17px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+    }
+    .loop-step:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      right: -18px;
+      top: 50%;
+      z-index: 3;
+      color: var(--green);
+      font-weight: 900;
+      transform: translateY(-50%);
+    }
+    .step-no { color: var(--green); font-size: 11px; font-weight: 900; letter-spacing: 1px; }
+    .loop-step h3 { margin: 8px 0 7px; font-size: 16px; }
+    .loop-step p { margin: 0; color: var(--muted); font-size: 13px; }
+
+    .timeline {
+      position: relative;
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: 0 24px;
+    }
+    .time {
+      padding: 18px 0;
+      color: var(--green);
+      font-weight: 850;
+      text-align: right;
+    }
+    .event {
+      position: relative;
+      padding: 18px 0 22px 26px;
+      border-left: 1px solid rgba(53,212,154,.28);
+    }
+    .event::before {
+      content: "";
+      position: absolute;
+      left: -6px;
+      top: 25px;
+      width: 11px;
+      height: 11px;
+      background: var(--green);
+      border: 3px solid var(--bg);
+      border-radius: 50%;
+      box-shadow: 0 0 14px rgba(53,212,154,.5);
+    }
+    .event p { margin: 2px 0 0; color: var(--muted); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      font-size: 14px;
+    }
+    th, td { padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: top; text-align: left; }
+    th { color: #fff; background: rgba(255,255,255,.045); font-size: 12px; letter-spacing: .25px; }
+    td { color: #c7cbd5; }
+    tr:last-child td { border-bottom: 0; }
+    .good { color: #7ce8c5; font-weight: 750; }
+    .bad { color: #ff8c89; font-weight: 750; }
+    .hold { color: #ffd55b; font-weight: 750; }
+
+    .principle {
+      display: grid;
+      grid-template-columns: 54px 1fr;
+      gap: 15px;
+      align-items: start;
+    }
+    .principle-no {
+      width: 48px;
+      height: 48px;
+      display: grid;
+      place-items: center;
+      color: var(--green);
+      background: rgba(53,212,154,.08);
+      border: 1px solid rgba(53,212,154,.19);
+      border-radius: 13px;
+      font-weight: 900;
+    }
+
+    .phase {
+      position: relative;
+      padding-top: 26px;
+    }
+    .phase::before {
+      content: attr(data-phase);
+      position: absolute;
+      top: 0;
+      left: 0;
+      color: var(--green);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 1px;
+    }
+    .phase ul, .list { margin: 10px 0 0; padding-left: 19px; color: var(--muted); }
+    .phase li, .list li { margin: 5px 0; }
+
+    .checklist { display: grid; gap: 8px; }
+    .check {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 12px;
+      background: rgba(255,255,255,.03);
+      border: 1px solid rgba(255,255,255,.06);
+      border-radius: 9px;
+    }
+    .check::before { content: "✓"; color: var(--green); font-weight: 900; }
+    .check.pending::before { content: "○"; color: var(--orange); }
+    .check.stop::before { content: "×"; color: var(--red); }
+
+    .source-list { display: grid; gap: 9px; }
+    .source {
+      padding: 12px 14px;
+      background: rgba(255,255,255,.03);
+      border-left: 3px solid rgba(53,212,154,.55);
+      border-radius: 0 8px 8px 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .result-preview {
+      padding: 22px;
+      background: #11131d;
+      border: 1px solid rgba(53,212,154,.24);
+      border-radius: 16px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+    }
+    .result-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding-bottom: 13px;
+      margin-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+      color: #fff;
+      font-weight: 850;
+    }
+    .result-badge {
+      padding: 4px 8px;
+      color: #07130f;
+      background: var(--green);
+      border-radius: 6px;
+      font-size: 10px;
+      font-weight: 900;
+    }
+    .result-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 7px 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .result-row b { text-align: right; }
+    .result-row.major { padding: 12px 0; color: #fff; font-size: 17px; }
+    .result-row.major b { color: var(--green); }
+
+    .final-lock {
+      padding: 32px;
+      background:
+        linear-gradient(125deg, rgba(53,212,154,.15), rgba(123,31,162,.11)),
+        var(--surface);
+      border: 1px solid rgba(53,212,154,.28);
+      border-radius: 20px;
+    }
+    .final-lock h2 { margin-top: 0; }
+    .final-lock blockquote {
+      margin: 20px 0 0;
+      padding: 18px 20px;
+      color: #fff;
+      background: rgba(15,16,25,.48);
+      border-left: 4px solid var(--yellow);
+      border-radius: 10px;
+      font-size: 18px;
+      font-weight: 750;
+    }
+
+    footer {
+      width: min(var(--max), calc(100% - 40px));
+      margin: 54px auto 0;
+      padding: 28px 0 48px;
+      color: var(--dim);
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+    }
+
+    @media (max-width: 980px) {
+      .hero { grid-template-columns: 1fr; padding-top: 72px; }
+      .north-star { max-width: 680px; }
+      .grid-4, .scoreboard { grid-template-columns: repeat(2,1fr); }
+      .loop { grid-template-columns: 1fr 1fr; }
+      .loop-step:not(:last-child)::after { display: none; }
+    }
+    @media (max-width: 720px) {
+      body { font-size: 14px; }
+      main, footer { width: min(100% - 24px, var(--max)); }
+      .topbar-inner { width: min(100% - 24px, var(--max)); min-height: 58px; }
+      .nav { display: none; }
+      .print-btn { padding: 0 13px; }
+      .hero { padding: 56px 0 38px; gap: 28px; }
+      h1 { font-size: 42px; letter-spacing: -2px; }
+      .lead { font-size: 16px; }
+      section { padding: 34px 0 24px; }
+      .grid-2, .grid-3, .grid-4, .scoreboard, .loop { grid-template-columns: 1fr; }
+      .timeline { grid-template-columns: 74px 1fr; gap: 0 12px; }
+      .time { font-size: 12px; }
+      .event { padding-left: 20px; }
+      table { display: block; overflow-x: auto; white-space: normal; }
+      th, td { min-width: 145px; }
+      .final-lock { padding: 22px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { transition: none !important; animation: none !important; }
+    }
+    @media print {
+      :root { --bg: #fff; --surface: #fff; --text: #171717; --muted: #4b5563; --dim: #6b7280; --border: #d1d5db; }
+      body { background: #fff; color: #171717; font-size: 11pt; }
+      .topbar, .progress, .print-btn { display: none !important; }
+      main, footer { width: 100%; }
+      .hero { padding: 24px 0; grid-template-columns: 1fr; }
+      h1, h2, h3, strong { color: #111; }
+      .card, .score, .loop-step, table, .final-lock, .north-star { background: #fff; box-shadow: none; break-inside: avoid; }
+      section { padding: 18px 0; }
+      a { color: #126c53; text-decoration: underline; }
+    }
+  </style>
+</head>
+<body>
+  <div class="progress" id="progress"></div>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand"><span class="brand-mark">R</span> Collector Market Challenge</div>
+      <nav class="nav" aria-label="문서 목차">
+        <a href="#verdict">판정</a>
+        <a href="#evidence">근거</a>
+        <a href="#structure">구조</a>
+        <a href="#loop">게임 루프</a>
+        <a href="#market">마켓</a>
+        <a href="#renaiss">Renaiss 효과</a>
+        <a href="#pilot">실험</a>
+        <a href="#build">개발</a>
+      </nav>
+      <button class="print-btn" type="button" onclick="window.print()">인쇄</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div>
+        <div class="eyebrow">Research-validated plan · v2 · 2026-07-10</div>
+        <h1>획득은 운,<br><span class="hero-accent">선택은 안목.</span></h1>
+        <p class="lead">
+          시즌1의 한 글자 포획과 공개방 열기를 되살리되, 매일 공개된 검증 카드 중
+          한 장을 고르는 <strong>무료 컬렉터 시세 안목 게임</strong>. 가격의 근거와 다음 행동의 출발점은 Renaiss다.
+          이 문서는 Renaiss 연계 커뮤니티 콜라보 기획이며 공식 Renaiss 웹사이트·제품이 아니다. 수집품은 게임 안 기록이고 실물 카드·NFT 소유권을 주지 않는다.
+        </p>
+        <div class="hero-meta">
+          <span class="chip">이전 Trading Game Plan 대체</span>
+          <span class="chip">Telegram 콜라보 게임방</span>
+          <span class="chip">One Daily Pick</span>
+          <span class="chip">No trading</span>
+          <span class="chip">Renaiss OS Index</span>
+        </div>
+      </div>
+      <aside class="north-star">
+        <div class="north-label">PRODUCT NORTH STAR</div>
+        <div class="north-quote">“잡기는 1초,<br>판단은 매일,<br>결과는 모두가 본다.”</div>
+        <div class="north-rule">
+          <div><span>●</span> 시즌1의 공개방 소셜 루프를 복원한다.</div>
+          <div><span>●</span> Renaiss 가격을 매일 쓰는 습관으로 만든다.</div>
+          <div><span>●</span> 재미와 실제 전환을 각각 측정한다.</div>
+        </div>
+      </aside>
+    </section>
+
+    <section id="verdict">
+      <div class="section-head">
+        <div class="kicker">01 · Decision</div>
+        <h2>전체 풀빌드는 보류, 핵심 루프는 GO</h2>
+        <p class="section-desc">과거의 FMV 선공개형 무료 추첨은 폐기했다. 현재 파일럿은 <code>c → blind guess → verified reveal → talk</code>을 공개방 핵심 루프로 사용한다.</p>
+      </div>
+      <div class="verdict">
+        <b>조건부 GO.</b> 먼저 2주 동안 <strong>공개방 포획 → 가격 추측 → Renaiss 가격 공개 → 오늘의 카드 한 장 선택 → 다음 유효 가격 공개 평가</strong>만 검증한다.
+        이 루프가 D7, 21시 복귀, 공개방 반응, Renaiss 카드 클릭을 동시에 올릴 때만 시즌 기록과 소리그로 확장한다. 매수·매도·포지션·수수료는 만들지 않는다.
+      </div>
+      <div class="scoreboard" style="margin-top:14px">
+        <div class="score"><div class="score-label">콘셉트 적합성</div><div class="score-value score-target">8.5/10</div><div class="score-label">수정 방향 기준</div></div>
+        <div class="score"><div class="score-label">과거 베이스라인</div><div class="score-value score-now">4/10</div><div class="score-label">폐기 · FMV 선공개형 추첨</div></div>
+        <div class="score"><div class="score-label">현재 핵심 루프</div><div class="score-value score-target">8/10</div><div class="score-label">블라인드 추측·검증 공개</div></div>
+        <div class="score"><div class="score-label">Renaiss 파트너 적합성</div><div class="score-value score-target">9/10</div><div class="score-label">API·전환추적 전제</div></div>
+      </div>
+    </section>
+
+    <section id="evidence">
+      <div class="section-head">
+        <div class="kicker">02 · Evidence</div>
+        <h2>붐의 원인은 거래가 아니라 공개방이었다</h2>
+        <p class="section-desc">Pokémon-bot 2026년 3~4월 운영 DB와 외부 사례를 함께 검증한 결론.</p>
+      </div>
+      <div class="grid grid-4">
+        <article class="card metric"><div class="label">일별 성공 포획자</div><div class="num">107.7</div><div class="label">평균 · 피크 263</div><div class="note">전체 DAU와 구분해야 하는 포획 지표</div></article>
+        <article class="card metric"><div class="label">3~4월 성공 포획</div><div class="num">209,332</div><div class="label">성공 포획자 872명</div><div class="note">한 글자 반복 행동의 규모</div></article>
+        <article class="card metric"><div class="label">포획 집중도</div><div class="num">47.22%</div><div class="label">TOP 15 점유 · TOP 50은 75.5%</div><div class="note">고인물 의존을 그대로 복제하면 안 됨</div></article>
+        <article class="card metric"><div class="label">유통망</div><div class="num">237 rooms</div><div class="label">스폰방 · 약 899 시도자</div><div class="note">콜라보 게임방 하나만으로 110 DAU 자동 복원 불가</div></article>
+      </div>
+
+      <div class="grid grid-2" style="margin-top:14px">
+        <article class="card">
+          <h3 class="good">시즌1에서 실제로 산 것</h3>
+          <ul class="list">
+            <li><code>c</code> 한 글자로 즉시 참여</li>
+            <li>희귀 스폰을 방 전체가 동시에 목격</li>
+            <li>즉시 당첨·실패·자랑이 공개됨</li>
+            <li>KOL방 여러 곳이 자연 유통 채널로 작동</li>
+            <li>빠른 패치와 운영자의 현장 연출</li>
+          </ul>
+        </article>
+        <article class="card">
+          <h3 class="bad">시즌1에서 약했던 것</h3>
+          <ul class="list">
+            <li>개인 비동기 거래소는 이용자가 적었음</li>
+            <li>복잡한 DM 메타게임은 캐주얼을 밀어냄</li>
+            <li>수집 목표 포화 후 일반 포획 의미가 소멸</li>
+            <li>전역 순위는 상위 소수 집중을 강화</li>
+            <li>운영 공백이 오자 시스템만으로 유지되지 못함</li>
+          </ul>
+        </article>
+      </div>
+
+      <div class="warn" style="margin-top:14px">
+        <strong>인과관계 정정:</strong> 시즌2가 붕괴의 단일 원인은 아니다. 시즌2 출시 전부터 수집 포화, 신규 유입 감소, 온보딩 실패, 기능 복잡화와 라이브옵스 공백으로 DAU가 하락했다. 새 게임도 운영·배포 계획 없이는 같은 길을 간다.
+      </div>
+    </section>
+
+    <section id="principles">
+      <div class="section-head">
+        <div class="kicker">03 · Product Rules</div>
+        <h2>바뀌지 않는 6가지 설계 원칙</h2>
+      </div>
+      <div class="grid grid-2">
+        <article class="card principle"><div class="principle-no">01</div><div><h3>공개방이 무대</h3><p>스폰, 추첨, 그레일, 시장 오픈, 챔피언은 그룹에 공개한다. 개인 주문과 상세 관리는 DM 버튼으로 숨긴다.</p></div></article>
+        <article class="card principle"><div class="principle-no">02</div><div><h3>입구는 한 글자</h3><p>캐주얼은 평생 <code>c</code>만 눌러도 된다. Daily Pick을 몰라도 수집과 공개 순간만으로 재미가 완결돼야 한다.</p></div></article>
+        <article class="card principle"><div class="principle-no">03</div><div><h3>획득은 운, 선택은 안목</h3><p>랜덤 당첨은 가챠의 흥분을 담당하고, 가격 추측과 하루 한 장의 Daily Pick이 시세 안목을 담당한다.</p></div></article>
+        <article class="card principle"><div class="principle-no">04</div><div><h3>컬렉션과 선택 기록 분리</h3><p>획득 카드는 영구 컬렉션에 남는다. Daily Pick은 그날 모두에게 공개된 같은 후보 중 한 장을 고르는 별도 기록이며 누적 자산과 무관하다.</p></div></article>
+        <article class="card principle"><div class="principle-no">05</div><div><h3>가격 신뢰가 게임 신뢰</h3><p>exact identity, confidence, freshness, 표본 조건을 통과한 카드만 Daily Pick과 결과 집계에 허용한다. 나머지는 수집용이다.</p></div></article>
+        <article class="card principle"><div class="principle-no">06</div><div><h3>돈 버는 게임이 아님</h3><p>현금·가상 투자금·매수·매도·수수료·실물 소유권 없음. 외부 메시지는 Collector Market Literacy에 맞춘다.</p></div></article>
+      </div>
+    </section>
+
+    <section id="structure">
+      <div class="section-head">
+        <div class="kicker">04 · Three-Layer Structure</div>
+        <h2>컬렉션, Daily Pick, 결과는 서로 다른 기록</h2>
+        <p class="section-desc">수집 운과 시장 실력을 섞지 않아야 뉴비와 고인물이 같은 경기에서 놀 수 있다.</p>
+      </div>
+      <div class="grid grid-3">
+        <article class="card">
+          <div class="icon">🎴</div>
+          <h3>1. 영구 컬렉션</h3>
+          <p>그룹 추첨에서 당첨된 카드가 쌓인다. 총 보유량·최고가·세트·등급·Showcase 10을 보여주며 시즌이 끝나도 남는다.</p>
+          <ul class="list">
+            <li>가챠·수집·자랑의 재미</li>
+            <li>총 FMV는 참고·Flex용</li>
+            <li>경쟁 자본이나 순위 점수 아님</li>
+          </ul>
+        </article>
+        <article class="card">
+          <div class="icon">📈</div>
+          <h3>2. Daily Market Pick</h3>
+          <p>매일 모든 유저가 같은 Market Board 후보를 보고 가장 오를 것 같은 카드 한 장을 고른다.</p>
+          <ul class="list">
+            <li>하루 한 장, 첫 선택 즉시 잠금</li>
+            <li>매일 21~24시 선택</li>
+            <li>현금·포지션·매수·매도·수수료 없음</li>
+          </ul>
+        </article>
+        <article class="card">
+          <div class="icon">🏆</div>
+          <h3>3. 개인·그룹 결과</h3>
+          <p>다음 유효 가격에서 개인 선택 결과는 DM으로 보여준다. 그룹에는 공개 기준을 통과한 익명 Crowd Pick 집계만 공개하며, 이름 공개 Best Call·Underdog·순위는 향후 별도 검증 항목이다.</p>
+          <ul class="list">
+            <li>현재: 개인 T+24h 결과 + 익명 그룹 집계</li>
+            <li>현재: 컬렉션 FMV·현금·포지션과 완전 분리</li>
+            <li>미래: 데이터·프라이버시 검증 뒤 Rookie/리그 실험</li>
+          </ul>
+        </article>
+      </div>
+
+      <div class="grid grid-2" style="margin-top:14px">
+        <div class="result-preview">
+          <div class="result-title">My Daily Pick <span class="result-badge">PRIVATE · T+24H</span></div>
+          <div class="result-row major"><span>My Pick</span><b>Charizard ex</b></div>
+          <div class="result-row"><span>Entry / Result</span><b>$430 → $483</b></div>
+          <div class="result-row"><span>24h Move</span><b>+12.4%</b></div>
+          <div class="result-row"><span>Evidence</span><b>exact · fresh · 3 sources</b></div>
+          <div class="result-row"><span>Use</span><b>Daily Pick record only</b></div>
+          <div class="result-row"><span>Collection</span><b>not included in result</b></div>
+        </div>
+        <div class="result-preview">
+          <div class="result-title">Result Bell <span class="result-badge">GROUP · ANONYMOUS</span></div>
+          <div class="result-row"><span>Settled Picks</span><b>18</b></div>
+          <div class="result-row major"><span>Crowd Pick</span><b>Pikachu</b></div>
+          <div class="result-row"><span>Support</span><b>7 picks · 39%</b></div>
+          <div class="result-row"><span>Median 24h Move</span><b>+3.1%</b></div>
+          <div class="result-row"><span>Privacy</span><b>no user names</b></div>
+          <div class="result-row"><span>다음 선택 창</span><b>21:00 KST</b></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="loop">
+      <div class="section-head">
+        <div class="kicker">05 · Core Loop</div>
+        <h2>1초 입장, 20초 판단, 다음 날 결과</h2>
+        <p class="section-desc">참여 난이도는 시즌1처럼 낮고, 장기 숙련은 실제 카드 지식에서 나온다.</p>
+      </div>
+      <div class="loop">
+        <article class="loop-step"><div class="step-no">STEP 01</div><h3>블라인드 스폰</h3><p>카드명·세트·언어·등급은 보이지만 FMV는 숨긴다.</p></article>
+        <article class="loop-step"><div class="step-no">STEP 02</div><h3><code>c</code> 참가</h3><p>설명 없이 한 번. 참가자 중 랜덤 1명이 카드를 획득한다.</p></article>
+        <article class="loop-step"><div class="step-no">STEP 03</div><h3>가격 추측</h3><p>모두가 가격대 또는 Over/Under를 고른다. 당첨자는 카드를 컬렉션에 획득한다.</p></article>
+        <article class="loop-step"><div class="step-no">STEP 04</div><h3>가격 공개</h3><p>근거 가격과 confidence를 공개하고 카드를 모두의 Market Board에 등록한다.</p></article>
+        <article class="loop-step"><div class="step-no">STEP 05</div><h3>Daily Pick</h3><p>검증된 Market Board 후보 중 한 장을 고르고 다음 유효 가격에서 결과를 받는다.</p></article>
+      </div>
+
+      <div class="grid grid-3" style="margin-top:14px">
+        <article class="card"><div class="icon">🎲</div><h3>당첨되지 않은 사람</h3><p>별도 XP·통화·누적 능력치는 받지 않는다. 대신 같은 가격 추측, 공개 결과, 방의 선택 분포와 대화에 참여하며 실패로 잃는 것도 없다.</p></article>
+        <article class="card"><div class="icon">🧠</div><h3>당첨된 사람</h3><p>카드를 영구 컬렉션에 얻고 가격 추측 결과도 함께 받는다. Daily Pick은 당첨 여부와 무관하게 모두 같은 후보에서 고른다.</p></article>
+        <article class="card"><div class="icon">👀</div><h3>구경하는 사람</h3><p>공개 reveal과 대화를 보고, Daily Pick 전역 출시 게이트가 열린 뒤에는 DM에서 하루 한 장을 선택할 수 있다.</p></article>
+      </div>
+    </section>
+
+    <section id="onboarding">
+      <div class="section-head">
+        <div class="kicker">06 · Progressive Disclosure</div>
+        <h2>진입은 단계적으로, Daily Pick 출시는 전역 게이트로 연다</h2>
+        <p class="section-desc">아래 단계는 개인별 기능 잠금이 아니라 이해 순서다. Daily Pick은 사용자 레벨이 아니라 운영 설정과 실제 Partner API·PostgreSQL preflight가 모두 통과할 때 전체 사용자에게 한 번에 열린다.</p>
+      </div>
+      <table>
+        <thead><tr><th>이해 단계</th><th>유저 행동</th><th>보이는 다음 층</th><th>성공 조건</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Lv0 · Catch</strong></td><td><code>c</code> 한 번</td><td>신규 첫 3분 안에 튜토리얼 카드 1장 보장</td><td>설명 없이 참여</td></tr>
+          <tr><td><strong>Lv1 · Reveal</strong></td><td>내 카드의 Renaiss 가격 확인</td><td>컬렉션과 Showcase 안내</td><td>가치 발견</td></tr>
+          <tr><td><strong>Lv2 · Predict</strong></td><td>가격대·Over/Under 선택</td><td>정답과 한 줄 가격 근거 공개</td><td>첫 시세 판단</td></tr>
+          <tr><td><strong>Lv3 · Pick</strong></td><td>전역 게이트가 열린 뒤 오늘의 카드 한 장 선택</td><td>다음 유효 가격과 익명 Crowd Pick 비교</td><td>첫 안목 기록</td></tr>
+          <tr><td><strong>Lv4 · Track</strong></td><td>DM에서 다음 유효 가격 결과 확인</td><td>현재는 개인 기록, 리그는 향후 실험</td><td>복귀 동기 형성</td></tr>
+        </tbody>
+      </table>
+      <div class="warn" style="margin-top:14px"><strong>신규 보호:</strong> 콜라보 게임방에서 첫 <code>c</code>를 누르면 활성 스폰 유무와 무관하게 가격 없는 Welcome Card를 평생 한 번 지급한다. 그룹 추첨·FMV·Daily Pick·점수·경제와는 별개다.</div>
+    </section>
+
+    <section id="players">
+      <div class="section-head">
+        <div class="kicker">07 · Player Fun</div>
+        <h2>뉴비는 행운으로 들어오고, 고인물은 안목으로 남는다</h2>
+      </div>
+      <table>
+        <thead><tr><th>구분</th><th>뉴비의 재미</th><th>고인물의 재미</th><th>공정성 장치</th></tr></thead>
+        <tbody>
+          <tr><td><strong>첫 경험</strong></td><td>한 번의 c, 첫 카드 보장, 가격 공개 반전</td><td>세트·언어·등급을 보고 가격대 추측</td><td>첫 성공 3분 이내</td></tr>
+          <tr><td><strong>수집</strong></td><td>첫 레어·그레일 행운과 자랑</td><td>희귀 세트·Showcase 10 완성</td><td>컬렉션은 경쟁 능력치가 아님</td></tr>
+          <tr><td><strong>Daily Pick</strong></td><td>후보 중 마음에 드는 한 장</td><td>세트·등급·가격 맥락을 보고 언더독 선택</td><td>모두 같은 후보, 하루 한 장</td></tr>
+          <tr><td><strong>현재 파일럿</strong></td><td>매일 새 선택 기회와 개인 결과</td><td>같은 후보에서 언더독을 고르는 안목</td><td>이름 공개 순위·경제·누적 자본 없음</td></tr>
+          <tr><td><strong>향후 실험</strong></td><td>프라이버시를 지킨 Rookie 기록</td><td>주간 칭호·익명 성과 공유</td><td>데이터 품질과 잔존 개선 확인 뒤에만 추가</td></tr>
+        </tbody>
+      </table>
+      <div class="verdict" style="margin-top:14px"><b>공정성 문장:</b> 고인물은 카드 지식이 많아서 유리할 수는 있지만, 오래 플레이해 돈과 능력치를 쌓았기 때문에 유리해서는 안 된다.</div>
+    </section>
+
+    <section id="market">
+      <div class="section-head">
+        <div class="kicker">08 · Market Rhythm</div>
+        <h2>21~24시는 수익 시간이 아니라 판단 잠금 시간</h2>
+        <p class="section-desc">실물 카드 시세는 세 시간 안에 거의 움직이지 않는다. 오늘 선택하고 내일 결과를 받는 구조로 정정한다.</p>
+      </div>
+      <div class="timeline">
+        <div class="time">낮 상시</div><div class="event"><h3>Collect & Scout</h3><p>현재는 5~10분 가변 스폰으로 공식 게임방의 조용한 기본 리듬을 만든다. 60~90초 Rush는 운영 검증 뒤 추가할 향후 실험이다.</p></div>
+        <div class="time">21:00</div><div class="event"><h3>Pick Open</h3><p>Daily Pick 전역 게이트가 활성화된 경우 오늘의 검증 후보를 열고 개인 선택은 DM에서 받는다.</p></div>
+        <div class="time">21:05~24:00</div><div class="event"><h3>Result Bell</h3><p>전역 게이트가 활성화된 경우 5분 간격으로 최근 2일 안의 완전 정산 코호트만 확인한다. 공개 결과는 보통 D-2이며, 기준 미달은 카드명·인원 없이 정산 완료만 알린다.</p></div>
+        <div class="time">21~24시</div><div class="event"><h3>Pick Window</h3><p>Market Board에서 오늘의 카드 한 장을 고른다. 첫 선택은 즉시 잠기며 현금이나 주문은 없다.</p></div>
+        <div class="time">24:00</div><div class="event"><h3>Pick Lock</h3><p>오늘의 선택을 마감한다. 미참여 페널티는 없다.</p></div>
+        <div class="time">T+24h</div><div class="event"><h3>Mark & Reveal</h3><p>첫 유효 스냅샷으로 개인 변동률을 확정한다. 7일 결과와 언더독 평가는 파일럿 이후 단계다.</p></div>
+      </div>
+
+      <div class="grid grid-2" style="margin-top:14px">
+        <article class="card">
+          <h3>선택 규칙</h3>
+          <ul class="list">
+            <li>모든 유저가 같은 검증 후보를 본다</li>
+            <li>하루 한 장, 첫 선택 즉시 잠금</li>
+            <li>현금·포지션·매수·매도·수수료 없음</li>
+            <li>미참여 페널티 없음</li>
+            <li>컬렉션 총액과 Daily Pick 결과 분리</li>
+            <li>Short, leverage, P2P는 범위 밖</li>
+          </ul>
+        </article>
+        <article class="card">
+          <h3>현재 기록과 향후 랭킹</h3>
+          <ul class="list">
+            <li>현재 개인 기록: 선택 카드의 다음 유효 가격 변동률</li>
+            <li>현재 그룹 공개: 기준을 통과한 익명 Crowd Pick 집계만</li>
+            <li>현재는 사용자 이름·내 주변 순위·주간 점수를 공개하지 않음</li>
+            <li>향후: 잔존·프라이버시 검증 뒤 Weekly/Rookie 실험</li>
+            <li>컬렉션 총액은 참고·Flex용이며 Daily Pick 결과와 분리</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section id="data">
+      <div class="section-head">
+        <div class="kicker">09 · Data Trust Gate</div>
+        <h2>가격이 흔들리면 게임과 Renaiss가 함께 다친다</h2>
+      </div>
+      <table>
+        <thead><tr><th>검증</th><th>Daily Pick 허용</th><th>수집만 허용</th><th>정책</th></tr></thead>
+        <tbody>
+          <tr><td>카드 식별</td><td class="good">set + item no + variation + language exact</td><td class="bad">fuzzy/candidate</td><td>이름 단독 매칭 금지</td></tr>
+          <tr><td>Confidence</td><td class="good">HIGH, 검증된 MED</td><td class="hold">LOW·충돌</td><td>MED 점수 가중 축소 가능</td></tr>
+          <tr><td>가격 기준</td><td class="good">실응답 method가 명시한 completed-sale Median</td><td class="hold">method 누락·Mean·평균·단일 호가</td><td>설정값이나 best estimate만으로 Median 추정 금지</td></tr>
+          <tr><td>Freshness</td><td class="good">설정 기준 내</td><td class="hold">오래된 데이터</td><td>카드별 freshness 표시</td></tr>
+          <tr><td>이상치</td><td class="good">정상 범위 또는 검토 완료</td><td class="bad">급격한 변동·0 근처 기준값</td><td>자동 격리 후 관리자 확인</td></tr>
+        </tbody>
+      </table>
+      <div class="danger" style="margin-top:14px">
+        <strong>출시 게이트:</strong> Partner API quota, numeric confidence, source count, freshness, 정확한 source URL과 응답 자체의 명시적 Median method가 확보되기 전에는 Daily Pick 결과 집계를 열지 않는다. 환경변수 선언은 데이터 근거가 아니며 조건 미달 카드는 수집만 허용한다.<br>
+        <strong>2026-07-11 구현 메모:</strong> 기능은 기본 비활성화되며 key·secret·구조 식별 경로·승인된 계약·Median 설정이 모두 있어도 실제 응답 method가 Median이어야 통과한다. 공식 안내의 <code>/v1/index/item-by-no</code>가 같은 날 실제 API에서 404이고 공개 OpenAPI에도 없었으므로, Renaiss 측 확인과 실응답 probe 전에는 활성화하지 않는다. 개인 무료팩도 공개 루프를 압도하지 않도록 기본 폐쇄하고 별도 실험 플래그에서만 연다.
+      </div>
+    </section>
+
+    <section id="renaiss">
+      <div class="section-head">
+        <div class="kicker">10 · Renaiss Impact</div>
+        <h2>가격표를 “매일 쓰는 습관”으로 만든다</h2>
+        <p class="section-desc">봇 안의 재미와 Renaiss의 실제 사업 효과를 연결하되 둘을 혼동하지 않는다.</p>
+      </div>
+      <div class="grid grid-3">
+        <article class="card"><div class="icon">📚</div><h3>시장 학습</h3><p>세트·언어·등급·Median·confidence를 반복해서 접한다. 숫자 암기가 아니라 왜 그 가격인지 배우게 한다.</p></article>
+        <article class="card"><div class="icon">🔗</div><h3>고의도 유입</h3><p>가격이 공개된 정확한 카드에서 Renaiss 상세로 이동한다. 일반 홈페이지가 아니라 카드 맥락이 유지된다.</p></article>
+        <article class="card"><div class="icon">🧪</div><h3>API 쇼케이스</h3><p>Index API가 퀴즈·스냅샷·랭킹·그레이딩 가이드에 매일 쓰이는 소비자 사례가 된다.</p></article>
+      </div>
+
+      <div class="grid grid-2" style="margin-top:14px">
+        <article class="card">
+          <h3>전환 브리지</h3>
+          <ol class="list">
+            <li>가격 노출: Renaiss OS Index 명시</li>
+            <li><strong>가격 근거 보기</strong>: 정확한 Index source page</li>
+            <li><strong>Renaiss에서 카드 보기</strong>: asset/market 딥링크 + referral sub-id</li>
+            <li>Renaiss postback: 가입 → 지갑 → 첫 가챠/Daily Pick</li>
+            <li>봇 참여자와 비참여 코호트의 전환 uplift 비교</li>
+          </ol>
+        </article>
+        <article class="card">
+          <h3>브랜드 안전선</h3>
+          <ul class="list">
+            <li><span class="bad">금지:</span> 돈 버는 법, 수익 보장, 진짜 투자 실력</li>
+            <li><span class="good">사용:</span> Collector Market Challenge, 시세 감각</li>
+            <li>현금·가상 투자금·매수·매도·수수료 없음</li>
+            <li>실결제 CTA에는 연령·보호자 안내 검토</li>
+            <li>실물 보상은 순자산 순위와 분리</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section id="social">
+      <div class="section-head">
+        <div class="kicker">11 · Social & LiveOps</div>
+        <h2>기능만 배포하지 않고, 붐을 연출한다</h2>
+      </div>
+      <div class="grid grid-3">
+        <article class="card phase" data-phase="CURRENT"><h3>현재 매일</h3><ul><li>콜라보 게임방 가변 블라인드 스폰</li><li>전역 게이트 활성 시 21:05 이후 완전 정산 Result Bell(보통 D-2)</li><li>사용자가 콜라보 게임방에서 직접 호출하는 일일 1회 <code>/flex</code></li><li>개인 결과는 DM, 기준을 통과한 익명 Crowd Pick만 그룹</li></ul></article>
+        <article class="card phase" data-phase="NEXT"><h3>향후 검증</h3><ul><li>운영자가 여는 짧은 Rush</li><li>Rookie/친구/KOL 소리그</li><li>익명 언더독·정확도 성과</li><li>주간 Best 10 공유 카드</li></ul></article>
+        <article class="card phase" data-phase="HOLD"><h3>검증 전 보류</h3><ul><li>자동 Flex와 이름 공개 순위</li><li>시즌 점수·연속 적중 경쟁</li><li>새 시즌 복귀 보너스</li><li>경제·거래·보상형 통화</li></ul></article>
+      </div>
+      <div class="warn" style="margin-top:14px">
+        <strong>런칭 조건:</strong> 시즌1 OG 20~30명, KOL 3~5곳, Renaiss 공식 채널 노출, 운영자 7일 집중 진행을 제품 출시와 한 묶음으로 잡는다. 콜라보 게임방 하나의 초기 현실 목표는 20~40 활성 유저다.
+      </div>
+    </section>
+
+    <section id="pilot">
+      <div class="section-head">
+        <div class="kicker">12 · Validation</div>
+        <h2>2주 파일럿으로 계속 만들지 결정한다</h2>
+      </div>
+      <table>
+        <thead><tr><th>단계</th><th>대상/기간</th><th>검증</th><th>통과 신호</th></tr></thead>
+        <tbody>
+          <tr><td><strong>0 · Instrument</strong></td><td>3일</td><td>이벤트 로그, 카드 딥링크, 가격 게이트</td><td>누락 이벤트 0, 429 0</td></tr>
+          <tr><td><strong>1 · FTUE</strong></td><td>10~20명 관찰</td><td>설명 없이 첫 c·첫 Active 결정</td><td>첫 성공 중앙값 3분 이내</td></tr>
+          <tr><td><strong>2 · Closed Pilot</strong></td><td>2주 · OG+신규</td><td>Catch-only 기준과 새 루프 비교</td><td>D1/D7·21시 복귀·행동률 상승</td></tr>
+          <tr><td><strong>3 · Season Zero</strong></td><td>2~4주</td><td>소리그·정산·Renaiss 전환</td><td>활성 20~40명, 데이터 오류 통제</td></tr>
+        </tbody>
+      </table>
+
+      <div class="grid grid-2" style="margin-top:14px">
+        <article class="card">
+          <h3 class="good">Go 지표 — 검증 가설</h3>
+          <div class="checklist">
+            <div class="check">D7이 기존 catch-only 코호트 대비 의미 있게 상승</div>
+            <div class="check">가격 공개 후 추측 또는 Daily Pick 행동률 50% 이상</div>
+            <div class="check">21시 주간 재참여율 30% 이상</div>
+            <div class="check">MAU 중 Renaiss 고유 클릭자 15% 이상</div>
+            <div class="check">Daily Pick 카드 exact match 95% 이상, 429 0건</div>
+            <div class="check">하위 50% 유저의 잔존이 악화되지 않음</div>
+          </div>
+        </article>
+        <article class="card">
+          <h3 class="bad">Stop / Rework 지표</h3>
+          <div class="checklist">
+            <div class="check stop">시드 유저 투입 후에도 21시 순유저 10명 미만</div>
+            <div class="check stop">가격 정정·무효 라운드가 1% 초과</div>
+            <div class="check stop">Renaiss 카드 클릭률이 MAU의 5% 미만</div>
+            <div class="check stop">신규 다수가 컬렉션과 Daily Pick의 차이를 설명하지 못함</div>
+            <div class="check stop">봇 메시지로 그룹 이탈·불만이 뚜렷하게 증가</div>
+            <div class="check stop">상위 10%만 Daily Pick을 하고 나머지는 관전도 중단</div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="build">
+      <div class="section-head">
+        <div class="kicker">13 · Build Scope</div>
+        <h2>있는 코드는 살리고, 약속과 다른 부분만 먼저 고친다</h2>
+      </div>
+      <table>
+        <thead><tr><th>구분</th><th>현재</th><th>이번 범위</th></tr></thead>
+        <tbody>
+          <tr><td class="good">현재 유지</td><td>콜라보 게임방 <code>c → guess → reveal → talk</code>, 랜덤 1인 추첨, 컬렉션, 사용자 호출 Flex</td><td>핵심 공개방 루프와 영문 UX 유지</td></tr>
+          <tr><td class="good">현재 구현</td><td>Welcome Card, Market Board, 하루 한 장 잠금, 불변 스냅샷, T+24h 판정, 익명 Result Bell, 딥링크 추적</td><td>Daily Pick은 실제 API·PostgreSQL preflight 뒤 전역 활성화. 개인 무료팩은 기본 폐쇄</td></tr>
+          <tr><td class="hold">과거 진단</td><td>FMV 선공개, 무조건 <code>c</code>, 전역 총액 순위</td><td>이미 폐기·수정된 베이스라인</td></tr>
+          <tr><td>제외</td><td>거래 엔진 초안</td><td>포지션, 매수·매도, 수수료, 가상 현금, P2P, short/leverage</td></tr>
+        </tbody>
+      </table>
+
+      <div class="grid grid-3" style="margin-top:14px">
+        <article class="card phase" data-phase="DONE"><h3>구현 완료</h3><ul><li>FMV 사전 숨김</li><li>가격 추측</li><li>컬렉션/Daily Pick 분리</li><li>첫-c Welcome Card</li></ul></article>
+        <article class="card phase" data-phase="DONE"><h3>구현 완료 · 활성 전 검증</h3><ul><li>하루 한 장 잠금</li><li>T+24h 평가</li><li>익명 Crowd Pick</li><li>멤버십 검증·durable outbox</li></ul></article>
+        <article class="card phase" data-phase="NEXT"><h3>다음 검증</h3><ul><li>실 Partner API preflight</li><li>PostgreSQL 동시성 테스트</li><li>실제 click KPI</li><li>partner postback</li></ul></article>
+      </div>
+      <div class="verdict" style="margin-top:14px"><b>확정 업데이트 · 2026-07-11:</b> 포지션·매수·매도·수수료·가상 현금을 제품 범위에서 제외. 현재 핵심은 콜라보 게임방의 <code>c → blind guess → verified reveal → talk</code>이다. 첫-c Welcome Card는 평생 한 번만 원자 지급되는 가격 없는 튜토리얼 수집품이며 FMV·점수·경제에 쓰지 않는다. Market Board, 하루 한 장 잠금, T+24h 첫 유효 가격 판정, 행동 이벤트, outbound click tracker와 durable Result Bell은 구현되어 있지만, Daily Pick은 개인별 레벨 잠금이 아니라 실제 Partner API·PostgreSQL preflight를 통과한 뒤 전체 사용자에게 여는 전역 시작 게이트다. 개인 결과는 DM으로만 보여주고, 그룹에는 콜라보 게임방 멤버십이 확인된 코호트의 익명 Crowd Pick 또는 privacy-limited Bell만 공개한다. Flex는 자동 방송이 아니라 사용자가 콜라보 게임방에서 직접 호출하는 일일 1회 자랑이다. 개인 무료팩은 공개 루프 검증 동안 기본 폐쇄다. 이름 공개 순위·자동 Flex·7d 결과·Rookie League·시즌 점수는 현재 범위가 아닌 향후 검증 항목이다.</div>
+    </section>
+
+    <section id="decisions">
+      <div class="section-head">
+        <div class="kicker">14 · Decisions to Lock</div>
+        <h2>구현 전에 확정할 7개 항목</h2>
+      </div>
+      <div class="checklist">
+        <div class="check pending"><strong>제품명:</strong>&nbsp; Renaiss Collector Market Challenge를 외부명으로 사용할지</div>
+        <div class="check pending"><strong>방 역할:</strong>&nbsp; 일반 커뮤니티방과 콜라보 게임방을 분리할지, 전용 토픽을 사용할지</div>
+        <div class="check"><strong>포획 키 — 확정:</strong>&nbsp; 르네이스 영어판은 catch의 <code>c</code>를 공식 한 글자 진입점으로 사용한다.</div>
+        <div class="check pending"><strong>시간대:</strong>&nbsp; 21시 고정 전 20시·21시·23시 반응을 1주 비교할지</div>
+        <div class="check pending"><strong>API:</strong>&nbsp; Partner key, confidence, source count, freshness 제공 일정</div>
+        <div class="check pending"><strong>Attribution:</strong>&nbsp; 카드 딥링크의 referral sub-id와 postback 범위</div>
+        <div class="check pending"><strong>브랜드:</strong>&nbsp; Renaiss가 허용하는 게임명·Daily Market Pick·시장 문구 승인</div>
+      </div>
+    </section>
+
+    <section id="sources">
+      <div class="section-head">
+        <div class="kicker">15 · Research Basis</div>
+        <h2>판단 근거</h2>
+      </div>
+      <div class="source-list">
+        <div class="source"><strong>로컬:</strong> Pokémon-bot 운영 DB 2026-03~04 재분석, GAME_PHILOSOPHY, March DB query result, DAU recovery audit, AI Masters 회고.</div>
+        <div class="source"><strong>Renaiss:</strong> <a href="https://index.renaissos.com/methodology">Index methodology</a>, <a href="https://index.renaissos.com/api-docs">Public API</a>, <a href="https://www.renaiss.xyz/terms">Terms</a>, <a href="https://medium.com/@renaissxyz/renaiss-tech-hackathon-s1-is-open-build-ai-games-tools-for-the-collector-economy-0ab1b39c23c4">Hackathon brief</a>.</div>
+        <div class="source"><strong>비교 사례:</strong> <a href="https://www.premierleague.com/en/news/4320685">Fantasy Premier League 2024/25</a>, <a href="https://www.pokemon.com/us/strategy/a-guide-to-collecting-cards-and-using-wonder-picks-in-pokemon-trading-card-game-pocket">Pokémon TCG Pocket social collection</a>.</div>
+        <div class="source"><strong>행동 연구:</strong> <a href="https://www.sciencedirect.com/science/article/pii/S0927537124000976">동급 리그와 순위 피로 RCT</a>, <a href="https://www.fca.org.uk/publications/fca-research/research-note-digital-engagement-practices-trading-apps-experiment">FCA trading gamification experiment</a>.</div>
+      </div>
+    </section>
+
+    <section>
+      <div class="final-lock">
+        <div class="kicker">Final Product Statement</div>
+        <h2>Renaiss가 장식이 아니라 게임의 판정자가 된다</h2>
+        <p class="section-desc">
+          시즌1의 공개방 가챠를 되살리고, 그 다음 판단을 Renaiss OS Index로 연결한다.
+          유저는 돈을 벌기 위해서가 아니라 오늘 가장 오를 것 같은 카드 한 장을 고르기 위해 시세를 배우며,
+          Renaiss는 가격을 검색하는 사이트에서 매일 확인하는 시장 기준으로 이동한다.
+        </p>
+        <blockquote>Catch in one tap. Make one daily pick. Learn the collectible market through Renaiss.</blockquote>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    Renaiss Collector Market Challenge · Research-validated execution plan v2 · 2026-07-10 KST<br>
+    본 문서의 수치형 성공 기준은 업계 보장값이 아니라 파일럿 검증 가설이다. Renaiss 가격은 베타 참고 데이터이며 투자 조언이 아니다.
+  </footer>
+
+  <script>
+    const progress = document.getElementById('progress');
+    const updateProgress = () => {
+      const scrollable = document.documentElement.scrollHeight - window.innerHeight;
+      const ratio = scrollable > 0 ? window.scrollY / scrollable : 0;
+      progress.style.width = `${Math.min(100, Math.max(0, ratio * 100))}%`;
+    };
+    window.addEventListener('scroll', updateProgress, { passive: true });
+    updateProgress();
+  </script>
+</body>
+</html>

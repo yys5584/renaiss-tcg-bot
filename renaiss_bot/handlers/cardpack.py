@@ -1,45 +1,93 @@
-"""Pack-opening, portfolio, and ranking commands."""
+"""Pack-opening and private collection commands."""
 
 from __future__ import annotations
 
 import asyncio
+import logging
+import os
 from html import escape
 from io import BytesIO
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, LinkPreviewOptions, Update
+from telegram.error import BadRequest, NetworkError, TimedOut
 from telegram.ext import ContextTypes
 
-from renaiss_bot.renderers.overlay import render_overlay_card
-from renaiss_bot.services.categories import resolve_category_key
+from renaiss_bot.database.queries import (
+    cancel_pack_open_reservation,
+    finalize_command_free_pack,
+    reserve_command_free_packs,
+)
+from renaiss_bot.renderers.overlay import overlay_cache_key, render_overlay_card
+from renaiss_bot.services.categories import get_category, resolve_category_key
 from renaiss_bot.services.captions import format_pack_caption
+from renaiss_bot.services.features import private_free_packs_enabled
+from renaiss_bot.services.market import daily_pick_enabled
+from renaiss_bot.services.media_cache import (
+    delete_telegram_file_id,
+    get_telegram_file_id,
+    remember_telegram_photo,
+)
 from renaiss_bot.services.pack import open_pack
 from renaiss_bot.services.pack_rules import (
     DAILY_FREE_PACKS,
-    EXTRA_FREE_PACK_RP,
     MAX_BATCH_PACKS,
-    PREMIUM_PACK_RP,
-    plan_pack_open,
 )
-from renaiss_bot.services.portfolio import PortfolioStats, get_portfolio_rankings, get_portfolio_stats
+from renaiss_bot.services.portfolio import (
+    PortfolioStats,
+    get_portfolio_stats,
+)
+from renaiss_bot.services.tracking import build_tracked_url
 
 _PACK_TYPE_ARGS = {"free", "normal", "standard", "premium", "bp", "paid"}
 _GRADE_ORDER = ("MUR", "UR", "SAR", "SR", "AR", "RR", "R", "U", "C", "-")
+logger = logging.getLogger(__name__)
 
 
 def _price_keyboard(url: str | None) -> InlineKeyboardMarkup:
     rows = []
     if url:
         rows.append([InlineKeyboardButton("View on Renaiss", url=url)])
-    rows.append([InlineKeyboardButton("My Portfolio", callback_data="renaiss:mycards")])
+    rows.append([InlineKeyboardButton("My Collection", callback_data="renaiss:mycards")])
     return InlineKeyboardMarkup(rows)
 
 
-def _portfolio_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("Open Pack", callback_data="renaiss:open")],
-            [InlineKeyboardButton("Portfolio Rank", callback_data="renaiss:rank")],
-        ]
+def _portfolio_keyboard() -> InlineKeyboardMarkup | None:
+    rows = []
+    if private_free_packs_enabled():
+        rows.append([InlineKeyboardButton("Open Pack", callback_data="renaiss:open")])
+    if daily_pick_enabled():
+        rows.append([InlineKeyboardButton("Daily Market Pick", callback_data="renaiss:market")])
+    return InlineKeyboardMarkup(rows) if rows else None
+
+
+async def _private_pack_closed_notice(update: Update) -> None:
+    if update.effective_message:
+        await update.effective_message.reply_text(
+            "Private free packs are closed during the collector-market pilot. "
+            "Join blind community spawns with <code>c</code>; cards you already collected remain available in <code>/mycards</code>.\n\n"
+            "In-game collection only · no physical card or NFT ownership.",
+            parse_mode="HTML",
+        )
+
+
+async def _dm_only_prompt(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    *,
+    payload: str,
+    label: str,
+) -> None:
+    if not update.effective_message:
+        return
+    username = getattr(getattr(context, "bot", None), "username", None)
+    keyboard = None
+    if username:
+        keyboard = InlineKeyboardMarkup(
+            [[InlineKeyboardButton(label, url=f"https://t.me/{username}?start={payload}")]]
+        )
+    await update.effective_message.reply_text(
+        "Packs and collection details stay in private chat so the group can focus on blind catches.",
+        reply_markup=keyboard,
     )
 
 
@@ -69,224 +117,341 @@ def _format_money(value) -> str:
         amount = float(value or 0)
     except (TypeError, ValueError):
         amount = 0
-    return f"${amount:,.0f}" if amount > 0 else "-"
+    if amount <= 0:
+        return "-"
+    if amount < 100:
+        return f"${amount:,.2f}".rstrip("0").rstrip(".")
+    return f"${amount:,.0f}"
 
 
 def _grade_line(grades: list[dict]) -> str:
     counts = {str(row.get("grade") or "-"): int(row.get("count") or 0) for row in grades}
-    parts = [f"{grade} {counts[grade]}" for grade in _GRADE_ORDER if counts.get(grade)]
+    parts = [
+        f"{grade_bar(grade) or escape(grade)} {counts[grade]}"
+        for grade in _GRADE_ORDER
+        if counts.get(grade)
+    ]
     if not parts:
         parts = [
             f"{escape(str(row.get('grade') or '-'))} {int(row.get('count') or 0)}"
             for row in grades[:6]
         ]
-    return ", ".join(parts) if parts else "-"
+    return " · ".join(parts) if parts else "-"
+
+
+def _card_row(idx: int, row: dict) -> str:
+    name = escape(str(row.get("card_name") or "-"))
+    grade = escape(str(row.get("grade") or "-"))
+    quantity = int(row.get("quantity") or 0)
+    quantity_text = f" ×{quantity}" if quantity > 1 else ""
+    grade_raw = str(row.get("grade") or "-")
+    bar = grade_bar(grade_raw)
+    grade_segment = f"{bar} {grade}" if bar else grade
+    parts = [f"{idx}. <b>{name}</b>{quantity_text} · {grade_segment}"]
+    set_code = str(row.get("set_code") or "").strip()
+    if set_code:
+        parts.append(escape(set_code.upper()))
+    category = str(row.get("category") or "")
+    if category and category != "pokemon_tcg":
+        parts.append(escape(category.replace("_", " ").title()))
+    price = _format_money(row.get("market_price_usd"))
+    if price != "-":
+        parts.append(f"<b>{price}</b>")
+    return " · ".join(parts)
 
 
 def _top_card_rows(rows: list[dict]) -> list[str]:
-    lines = []
-    for idx, row in enumerate(rows, 1):
-        name = escape(str(row.get("card_name") or "-"))
-        grade = escape(str(row.get("grade") or "-"))
-        category = escape(str(row.get("category") or "-"))
-        quantity = int(row.get("quantity") or 0)
-        price = _format_money(row.get("market_price_usd"))
-        quantity_text = f" x{quantity}" if quantity > 1 else ""
-        lines.append(f"{idx}. <b>{name}</b> {grade}{quantity_text} / {price} / <code>{category}</code>")
-    return lines
+    return [_card_row(idx, row) for idx, row in enumerate(rows, 1)]
 
 
 def _recent_card_rows(rows: list[dict]) -> list[str]:
-    lines = []
-    for idx, row in enumerate(rows, 1):
-        name = escape(str(row.get("card_name") or "-"))
-        grade = escape(str(row.get("grade") or "-"))
-        category = escape(str(row.get("category") or "-"))
-        quantity = int(row.get("quantity") or 0)
-        quantity_text = f" x{quantity}" if quantity > 1 else ""
-        lines.append(f"{idx}. <b>{name}</b> {grade}{quantity_text} / <code>{category}</code>")
-    return lines
+    return [_card_row(idx, row) for idx, row in enumerate(rows, 1)]
 
 
 def _category_rows(rows: list[dict]) -> str:
     parts = []
     for row in rows[:4]:
-        label = escape(str(row.get("category") or "-"))
+        label = escape(str(row.get("category") or "-").replace("_", " ").title())
         count = int(row.get("count") or 0)
-        value = _format_money(row.get("value_usd"))
-        parts.append(f"{label} {count} cards ({value})")
-    return ", ".join(parts) if parts else "-"
+        parts.append(f"{label} {count}")
+    return " · ".join(parts) if parts else "-"
 
 
-def _achievement_lines(stats: PortfolioStats) -> list[str]:
-    unlocked = stats.unlocked_achievements
-    if not unlocked:
-        return ["No achievements unlocked yet."]
-    latest = sorted(unlocked, key=lambda item: item.points, reverse=True)[:5]
-    return [f"- <b>{escape(item.title)}</b> +{item.points}" for item in latest]
+def _collection_web_url() -> str:
+    return os.getenv(
+        "RENAISS_COLLECTION_WEB_URL", "https://tgpoke.com/renaiss/mycards"
+    ).strip()
 
 
-def _change_7d_suffix(stats: PortfolioStats) -> str:
-    change_usd = stats.change_7d_usd
-    if change_usd is None:
-        return ""
-    suffix = f" (7d {change_usd:+,.2f}$"
-    if stats.change_7d_pct is not None:
-        suffix += f", {stats.change_7d_pct:+.1f}%"
-    return suffix + ")"
+_DIVIDER = "━" * 18
 
 
-def _portfolio_text(stats: PortfolioStats, rp_balance: int = 0, cash: float = 0.0) -> str:
+def _portfolio_text(stats: PortfolioStats) -> str:
     achievement_count = len(stats.unlocked_achievements)
     total_achievements = len(stats.achievements)
-    net_worth = stats.total_value_usd + (cash or 0)
-    lines = [
-        "<b>Renaiss Portfolio</b>",
-        "------------",
-        f"Net worth: <b>{_format_money(net_worth)}</b>  (cards {_format_money(stats.total_value_usd)}{_change_7d_suffix(stats)} + cash ${cash:,.0f})",
-        f"RP: <b>{rp_balance:,}</b>",
-        f"Renaiss Score: <b>{stats.renaiss_score}</b>",
-        (
-            "Score split: "
-            f"Value {stats.value_score} / Diversity {stats.diversity_score} / "
-            f"Achievements {stats.achievement_score}"
-        ),
-        "",
-        "<b>Collection</b>",
-        f"Total cards: <b>{stats.total_cards}</b>",
-        f"Unique cards: <b>{stats.unique_cards}</b>",
-        f"Categories: <b>{stats.categories}</b> / Sets: <b>{stats.sets}</b>",
-        f"Priced cards: <b>{stats.priced_cards}</b> / Unpriced: <b>{stats.unpriced_cards}</b>",
-        f"Category mix: {escape(_category_rows(stats.category_counts))}",
-        f"Grade mix: {escape(_grade_line(stats.grade_counts))}",
-        "",
-        f"<b>Achievements</b> {achievement_count}/{total_achievements}",
-        *_achievement_lines(stats),
-    ]
+    lines = [_DIVIDER, f"{icon('container')} <b>RENAISS COLLECTION</b>", _DIVIDER]
+
+    value = _format_money(stats.total_value_usd)
+    if value != "-":
+        lines.append(f"{icon('coin')} <b>Value</b>   {value}")
+    else:
+        lines.append(f"{icon('coin')} <b>Value</b>   <i>pending — prices verify twice a day</i>")
+    lines.append(
+        f"{icon('pokedex')} <b>Cards</b>   {stats.total_cards} · {stats.unique_cards} unique"
+        f" · {stats.sets} sets"
+    )
+    if stats.season_pool_total > 0:
+        percent = stats.owned_in_pool / stats.season_pool_total * 100
+        bar_filled = min(10, round(percent / 10))
+        if stats.owned_in_pool > 0:
+            bar_filled = max(1, bar_filled)
+        bar = "▰" * bar_filled + "▱" * (10 - bar_filled)
+        lines.append(
+            f"{icon('footsteps')} <b>Pool</b>    {bar} {stats.owned_in_pool}/{stats.season_pool_total}"
+            f" · {percent:.1f}%"
+        )
+    grade_line = _grade_line(stats.grade_counts)
+    if grade_line != "-":
+        lines.append(f"{icon('bookmark')} <b>Grades</b>  {grade_line}")
+    if len(stats.category_counts) > 1:
+        lines.append(f"{icon('stationery')} <b>Mix</b>     {_category_rows(stats.category_counts)}")
+
+    lines.extend(
+        [_DIVIDER, f"{icon('champion')} <b>ACHIEVEMENTS</b> {achievement_count}/{total_achievements}"]
+    )
+    unlocked_titles = [escape(item.title) for item in stats.unlocked_achievements[:5]]
+    if unlocked_titles:
+        lines.append(icon('check') + " " + " · ".join(unlocked_titles))
+    else:
+        lines.append("None yet — join a group spawn with <code>c</code>.")
 
     top_rows = _top_card_rows(stats.top_cards)
     if top_rows:
-        lines.extend(["", "<b>Most Valuable Cards</b>", *top_rows])
+        lines.extend([_DIVIDER, f"{icon('favorite')} <b>TOP CARDS</b>", *top_rows])
 
     recent_rows = _recent_card_rows(stats.recent_cards)
     if recent_rows:
-        lines.extend(["", "<b>Recent Pulls</b>", *recent_rows])
+        lines.extend([_DIVIDER, f"{icon('windy')} <b>RECENT ADDS</b>", *recent_rows])
 
+    lines.extend(
+        [
+            _DIVIDER,
+            f'🔗 <a href="{escape(_collection_web_url(), quote=True)}">'
+            "Open the full web collection</a>",
+            "<i>In-game collection only · no physical card or NFT ownership.</i>",
+        ]
+    )
     return "\n".join(lines)
 
 
 async def cmd_open(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not private_free_packs_enabled():
+        await _private_pack_closed_notice(update)
+        return
     args = list(getattr(context, "args", None) or [])
     category, pack_type, count, pay_with_rp = _parse_open_args(args)
     user_id = update.effective_user.id if update.effective_user else None
+    chat_id = update.effective_chat.id if update.effective_chat else None
 
-    from renaiss_bot.database.queries import count_command_free_packs_today, get_points, spend_points
-
-    free_used, rp_balance = await asyncio.gather(
-        count_command_free_packs_today(user_id),
-        get_points(user_id),
-    )
-    plan = plan_pack_open(
-        pack_type,
-        count,
-        free_used_today=free_used,
-        rp_balance=rp_balance,
-        pay_with_rp=pay_with_rp,
-    )
-
-    if plan.error is not None:
+    if not get_category(category).enabled:
         if update.effective_message:
-            if plan.error == "no_free_left":
-                text = (
-                    f"📦 Daily free packs used ({DAILY_FREE_PACKS}/{DAILY_FREE_PACKS}).\n"
-                    f"Extra pack: <code>/open rp</code> ({EXTRA_FREE_PACK_RP} RP each) — your RP: <b>{rp_balance}</b>\n"
-                    "Earn RP by joining drops (<code>f</code>) and winning the daily quiz."
-                )
-            else:
-                needed = PREMIUM_PACK_RP if pack_type == "premium" else EXTRA_FREE_PACK_RP
-                text = (
-                    f"💰 Not enough RP (need {needed}, you have <b>{rp_balance}</b>).\n"
-                    "Earn RP by joining drops (<code>f</code>) and winning the daily quiz."
-                )
-            await update.effective_message.reply_text(text, parse_mode="HTML")
+            await update.effective_message.reply_text(
+                "That card category is planned but is not open for packs yet."
+            )
         return
 
-    if plan.rp_cost > 0:
-        if not await spend_points(user_id, plan.rp_cost, source=f"open_{pack_type}"):
-            if update.effective_message:
-                await update.effective_message.reply_text(
-                    f"💰 Not enough RP (need {plan.rp_cost}). Your balance may have just changed.",
-                    parse_mode="HTML",
-                )
+    if update.effective_chat and getattr(update.effective_chat, "type", "private") != "private":
+        await _dm_only_prompt(
+            update,
+            context,
+            payload=f"open_{category}",
+            label="Open Pack in DM",
+        )
+        return
+
+    if pay_with_rp or pack_type in {"premium", "bp", "paid"}:
+        if update.effective_message:
+            await update.effective_message.reply_text(
+                "Premium and RP packs are not part of the current Renaiss pilot. "
+                "Use <code>/open</code> for your daily free packs or join group spawns with <code>c</code>.",
+                parse_mode="HTML",
+            )
+        return
+
+    if user_id is None or update.effective_message is None:
+        return
+    update_id = getattr(update, "update_id", None)
+    callback_id = getattr(getattr(update, "callback_query", None), "id", None)
+    message_id = getattr(update.effective_message, "message_id", None)
+    request_token = update_id if update_id is not None else callback_id or message_id
+    if request_token is None:
+        await update.effective_message.reply_text(
+            "Pack opening is temporarily unavailable because this request could not be identified. "
+            "No pack was opened."
+        )
+        return
+    request_id = f"telegram:{request_token}:open"
+    try:
+        reservation = await reserve_command_free_packs(
+            request_id=request_id,
+            user_id=user_id,
+            chat_id=chat_id,
+            platform="telegram",
+            category=category,
+            requested_count=count,
+            daily_limit=DAILY_FREE_PACKS,
+        )
+    except Exception as exc:
+        logger.warning("Free pack reservation failed user=%s: %s", user_id, exc)
+        await update.effective_message.reply_text(
+            "Pack opening is temporarily unavailable because your daily quota could not be verified. "
+            "No pack was opened.",
+        )
+        return
+    if not reservation.created:
+        if reservation.status == "quota_full":
+            text = (
+                f"📦 Daily free packs used ({DAILY_FREE_PACKS}/{DAILY_FREE_PACKS}).\n"
+                "Join the next blind group spawn with <code>c</code>."
+            )
+        elif reservation.status == "completed":
+            text = "This pack request was already completed. Check <code>/mycards</code>."
+        elif reservation.status == "reserved":
+            text = "This pack request is already being processed."
+        else:
+            text = "That pack request expired. Send a new <code>/open</code> command."
+        await update.effective_message.reply_text(text, parse_mode="HTML")
+        return
+    try:
+        result = await open_pack(
+            user_id=user_id,
+            category_key=category,
+            pack_type="free",
+            count=reservation.allowed_count,
+        )
+    except Exception as exc:
+        logger.warning("Free pack generation failed user=%s: %s", user_id, exc)
+        try:
+            await cancel_pack_open_reservation(request_id)
+        except Exception:
+            logger.warning("Free pack reservation cancellation failed request=%s", request_id)
+        await update.effective_message.reply_text("Pack opening failed. No pack was recorded.")
+        return
+    try:
+        await finalize_command_free_pack(
+            request_id=request_id,
+            user_id=user_id,
+            chat_id=chat_id,
+            result=result,
+        )
+    except Exception as exc:
+        logger.exception("Free pack finalization failed request=%s: %s", request_id, exc)
+        try:
+            confirmation = await reserve_command_free_packs(
+                request_id=request_id,
+                user_id=user_id,
+                chat_id=chat_id,
+                platform="telegram",
+                category=category,
+                requested_count=count,
+                daily_limit=DAILY_FREE_PACKS,
+            )
+        except Exception:
+            confirmation = None
+        if confirmation is None or confirmation.status != "completed":
+            await update.effective_message.reply_text(
+                "The pack result could not be safely saved, so no successful opening is being announced."
+            )
             return
-
-    result = await open_pack(
-        user_id=user_id,
-        category_key=category,
-        pack_type=pack_type,
-        count=plan.allowed_count,
+        logger.warning("Recovered completed pack after uncertain finalize request=%s", request_id)
+    free_left = max(
+        0,
+        DAILY_FREE_PACKS - reservation.used_before - reservation.allowed_count,
     )
-    if plan.rp_cost > 0:
-        wallet_line = f"\n💰 Paid <b>{plan.rp_cost} RP</b> (balance {rp_balance - plan.rp_cost})"
-    else:
-        free_left = max(0, DAILY_FREE_PACKS - free_used - plan.allowed_count)
-        wallet_line = f"\n📦 Free packs left today: <b>{free_left}/{DAILY_FREE_PACKS}</b>"
+    wallet_line = f"\n📦 Free packs left today: <b>{free_left}/{DAILY_FREE_PACKS}</b>"
     caption = format_pack_caption(result) + wallet_line
+    render_key = overlay_cache_key(result.best_card, result.best_price)
 
-    if update.effective_message:
-        image_bytes = await render_overlay_card(result.best_card, result.best_price)
-        if image_bytes:
-            photo = BytesIO(image_bytes)
+    async def cached_or_rendered_photo():
+        cached_file_id = await get_telegram_file_id(render_key)
+        if cached_file_id:
+            return cached_file_id
+        return await render_overlay_card(result.best_card, result.best_price)
+
+    tracked_result, render_result = await asyncio.gather(
+        build_tracked_url(
+            result.best_price.referral_url,
+            user_id=user_id,
+            chat_id=chat_id,
+            local_card_id=result.best_card.local_card_id or None,
+            source="telegram_pack",
+        ),
+        cached_or_rendered_photo(),
+        return_exceptions=True,
+    )
+    if isinstance(tracked_result, BaseException):
+        logger.warning("Pack tracking link failed request=%s: %s", request_id, tracked_result)
+        tracked_url = result.best_price.referral_url
+    else:
+        tracked_url = tracked_result
+    if isinstance(render_result, BaseException):
+        logger.warning("Pack result render failed request=%s: %s", request_id, render_result)
+        image_payload = None
+    else:
+        image_payload = render_result
+    if image_payload:
+        if isinstance(image_payload, bytes):
+            photo = BytesIO(image_payload)
             photo.name = "renaiss_pack_result.png"
-            await update.effective_message.reply_photo(
+        else:
+            photo = image_payload
+        try:
+            sent_message = await update.effective_message.reply_photo(
                 photo=photo,
                 caption=caption,
                 parse_mode="HTML",
-                reply_markup=_price_keyboard(result.best_price.referral_url),
+                reply_markup=_price_keyboard(tracked_url),
             )
-        else:
-            await update.effective_message.reply_text(
-                caption,
-                parse_mode="HTML",
-                reply_markup=_price_keyboard(result.best_price.referral_url),
+            if isinstance(image_payload, bytes):
+                await remember_telegram_photo(render_key, sent_message)
+            return
+        except BadRequest as exc:
+            if isinstance(image_payload, str):
+                await delete_telegram_file_id(render_key)
+            logger.warning("Pack photo was rejected; using text request=%s: %s", request_id, exc)
+        except (TimedOut, NetworkError) as exc:
+            logger.error(
+                "Pack photo delivery is ambiguous; no automatic duplicate request=%s: %s",
+                request_id,
+                exc,
             )
-
-    try:
-        from renaiss_bot.database.queries import log_pack_event, register_pack_cards
-
-        chat_id = update.effective_chat.id if update.effective_chat else None
-        await asyncio.gather(
-            register_pack_cards(user_id=user_id, chat_id=chat_id, result=result),
-            log_pack_event(
-                user_id=user_id,
-                chat_id=chat_id,
-                category=result.category,
-                best_card=result.best_card,
-                price=result.best_price,
-                pack_type=result.pack_type,
-                pack_count=result.pack_count,
-                card_count=len(result.cards),
-                pool_source=result.pool_source,
-                source="command",
-            ),
-        )
-    except Exception:
-        pass
+            return
+        except Exception as exc:
+            logger.error(
+                "Pack photo delivery failed ambiguously; no automatic duplicate request=%s: %s",
+                request_id,
+                exc,
+            )
+            return
+    await update.effective_message.reply_text(
+        caption,
+        parse_mode="HTML",
+        reply_markup=_price_keyboard(tracked_url),
+    )
 
 
 async def cmd_pack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not private_free_packs_enabled():
+        await _private_pack_closed_notice(update)
+        return
     if update.effective_message:
         await update.effective_message.reply_text(
             "<b>Renaiss Packs</b>\n"
             "------------\n"
             f"- <code>/open</code>: open a free pack ({DAILY_FREE_PACKS}/day)\n"
-            f"- <code>/open rp</code>: extra free pack ({EXTRA_FREE_PACK_RP} RP each)\n"
-            f"- <code>/open premium</code>: premium pack ({PREMIUM_PACK_RP} RP)\n"
             f"- <code>/open 5</code>: open multiple packs at once (max {MAX_BATCH_PACKS})\n"
             "- <code>/open one_piece_tcg</code>: One Piece packs\n"
-            "- <code>d</code>: call a group drop / <code>f</code>: join it\n"
-            "\n"
-            "Earn RP: join drops (+50), answer the daily quiz (+100).",
+            "- <code>c</code>: enter the current blind group spawn",
             parse_mode="HTML",
         )
 
@@ -294,64 +459,45 @@ async def cmd_pack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def cmd_mycards(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.effective_message:
         return
-
-    from renaiss_bot.database.queries import get_cash, get_points
+    if update.effective_chat and getattr(update.effective_chat, "type", "private") != "private":
+        await _dm_only_prompt(
+            update,
+            context,
+            payload="mycards",
+            label="View Collection in DM",
+        )
+        return
 
     uid = update.effective_user.id if update.effective_user else None
     try:
-        stats, rp_balance, cash = await asyncio.gather(
-            get_portfolio_stats(uid),
-            get_points(uid),
-            get_cash(uid),
+        stats = await get_portfolio_stats(uid)
+    except Exception as exc:
+        logger.warning("Collection lookup failed user=%s: %s", uid, exc)
+        await update.effective_message.reply_text(
+            "Your collection is temporarily unavailable because it could not be verified."
         )
-    except Exception:
-        stats, rp_balance, cash = None, 0, 0.0
+        return
 
     if not stats:
+        next_step = "Join a blind group spawn with <code>c</code>."
+        if private_free_packs_enabled():
+            next_step = (
+                "Join a blind group spawn with <code>c</code>, or use the optional "
+                "private <code>/open</code> experiment."
+            )
         await update.effective_message.reply_text(
-            "<b>Renaiss Portfolio</b>\n"
+            "<b>Renaiss Collection</b>\n"
             "------------\n"
-            "No cards are saved yet. Open a pack with <code>/open</code> to start building your portfolio.",
+            f"No cards are saved yet. {next_step}\n\n"
+            "In-game collection only · no physical card or NFT ownership.",
             parse_mode="HTML",
             reply_markup=_portfolio_keyboard(),
         )
         return
 
     await update.effective_message.reply_text(
-        _portfolio_text(stats, rp_balance, cash),
+        _portfolio_text(stats),
         parse_mode="HTML",
         reply_markup=_portfolio_keyboard(),
+        link_preview_options=LinkPreviewOptions(is_disabled=True),
     )
-
-
-async def cmd_rank(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not update.effective_message:
-        return
-
-    try:
-        rows = await get_portfolio_rankings(limit=10)
-    except Exception:
-        rows = []
-
-    if not rows:
-        await update.effective_message.reply_text(
-            "<b>Renaiss Portfolio Rank</b>\n"
-            "------------\n"
-            "No ranked portfolios yet.",
-            parse_mode="HTML",
-        )
-        return
-
-    lines = ["<b>Renaiss Portfolio Rank</b>", "------------"]
-    for idx, row in enumerate(rows, 1):
-        user_id = escape(str(row.get("user_id") or "-"))
-        value = _format_money(row.get("total_value_usd"))
-        unique_cards = int(row.get("unique_cards") or 0)
-        score = int(row.get("renaiss_score") or 0)
-        achievement_count = int(row.get("achievement_count") or 0)
-        lines.append(
-            f"{idx}. <code>{user_id}</code> / <b>{value}</b> / "
-            f"{unique_cards} unique / score {score} / achievements {achievement_count}"
-        )
-
-    await update.effective_message.reply_text("\n".join(lines), parse_mode="HTML")

@@ -17,6 +17,8 @@ async def open_pack(
     count: int = 1,
 ) -> PackOpenResult:
     category = get_category(category_key)
+    if not category.enabled:
+        raise ValueError(f"card category is not enabled: {category.key}")
     normalized_pack_type = normalize_pack_type(pack_type)
     pack_count = clamp_pack_count(count)
     pool, pool_source = await load_card_pool(user_id, category.key)

@@ -4,25 +4,34 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import sys
-from urllib.parse import urlencode
 
 import aiohttp
-from dotenv import load_dotenv
+
+from renaiss_bot.runtime import load_runtime_environment
+from renaiss_bot.services.client import (
+    _api_base,
+    _headers,
+    _partner_request_guard,
+    _record_partner_rate_limit,
+    _search_url,
+)
+from renaiss_bot.services.models import CardIdentity
 
 
 async def probe(name: str) -> None:
-    base = (os.getenv("RENAISS_API_BASE_URL") or "").rstrip("/")
-    path = os.getenv("RENAISS_API_SEARCH_PATH", "/v1/search")
-    key = os.getenv("RENAISS_API_KEY", "").strip()
-    headers = {"Accept": "application/json"}
-    if key:
-        headers["Authorization"] = f"Bearer {key}"
-    url = f"{base}{path}?{urlencode({'q': name, 'limit': 12})}"
-    async with aiohttp.ClientSession(headers=headers) as s:
-        async with s.get(url) as r:
-            data = await r.json(content_type=None)
+    if not _api_base():
+        raise RuntimeError("RENAISS_API_BASE_URL is missing or not allowlisted HTTPS")
+    card = CardIdentity(category="pokemon_tcg", card_name=name)
+    timeout_seconds = 5.0
+    async with _partner_request_guard(timeout_seconds=timeout_seconds):
+        timeout = aiohttp.ClientTimeout(total=timeout_seconds)
+        async with aiohttp.ClientSession(timeout=timeout, headers=_headers()) as s:
+            async with s.get(_search_url(card), allow_redirects=False) as r:
+                if r.status == 429:
+                    await _record_partner_rate_limit(r)
+                r.raise_for_status()
+                data = await r.json(content_type=None)
     # 후보 리스트 추출
     items = data
     if isinstance(data, dict):
@@ -46,13 +55,13 @@ async def probe(name: str) -> None:
 
 
 async def main() -> None:
-    load_dotenv()
+    load_runtime_environment()
     names = sys.argv[1:] or ["Alakazam", "Blastoise"]
     for n in names:
         try:
             await probe(n)
-        except Exception as e:
-            print(f"probe {n} failed: {e}")
+        except Exception as exc:
+            print(f"probe {n!r} failed (error={type(exc).__name__}).")
 
 
 if __name__ == "__main__":
