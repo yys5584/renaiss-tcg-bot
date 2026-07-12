@@ -30,7 +30,13 @@ def _is_group_command(update: Update) -> bool:
     text = (getattr(message, "text", None) or "").strip()
     if not chat or chat.type not in {"group", "supergroup"} or not message:
         return False
-    return text.lower() in {"c", "force"} or text.startswith("/")
+    lowered = text.lower()
+    return (
+        lowered in {"c", "force"}
+        or lowered.startswith("trade ")
+        or lowered == "trade"
+        or text.startswith("/")
+    )
 
 
 async def delete_group_command_job(context: ContextTypes.DEFAULT_TYPE) -> None:

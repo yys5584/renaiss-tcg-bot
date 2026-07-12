@@ -1859,3 +1859,133 @@ async def get_catch_ranking(*, period: str, limit: int = 10) -> dict:
         "best_catch": best_catch,
         "total_catches": sum(row["catches"] for row in ranking_rows),
     }
+
+
+# ── P2P 카드 교환 (무현금 물물교환; TGPoke group_trade 이식) ──────────────
+
+async def list_tradeable_cards(user_id: int, *, limit: int = 8) -> list[dict]:
+    """교환 제안 버튼용: 대상 유저의 보유 카드 상위 목록."""
+    pool = await get_db()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT local_card_id, category, card_name, grade,
+                   COALESCE(market_price_usd, 0)::float AS market_price_usd, quantity
+            FROM renaiss_user_cards
+            WHERE user_id = $1 AND quantity > 0
+              AND local_card_id NOT LIKE 'renaiss:starter:%'
+            ORDER BY COALESCE(market_price_usd, 0) DESC, card_name
+            LIMIT $2
+            """,
+            user_id,
+            max(1, min(12, limit)),
+        )
+    return [dict(row) for row in rows]
+
+
+async def find_owned_card(user_id: int, query: str) -> dict | None:
+    """이름(부분일치)으로 본인 보유 카드 한 장을 찾는다. 정확 일치 우선."""
+    text = (query or "").strip()
+    if not text:
+        return None
+    pool = await get_db()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT local_card_id, category, card_name, grade,
+                   COALESCE(market_price_usd, 0)::float AS market_price_usd, quantity
+            FROM renaiss_user_cards
+            WHERE user_id = $1 AND quantity > 0
+              AND local_card_id NOT LIKE 'renaiss:starter:%'
+              AND card_name ILIKE '%' || $2 || '%'
+            ORDER BY (lower(card_name) = lower($2)) DESC,
+                     COALESCE(market_price_usd, 0) DESC
+            LIMIT 1
+            """,
+            user_id,
+            text,
+        )
+    return dict(row) if row else None
+
+
+class TradeConflict(Exception):
+    """한쪽이 카드를 더 이상 보유하지 않아 교환이 무효가 된 경우."""
+
+
+async def execute_card_trade(
+    *,
+    initiator_id: int,
+    partner_id: int,
+    initiator_card_id: str,
+    partner_card_id: str,
+) -> dict:
+    """두 유저의 카드 1장을 원자적으로 맞교환한다.
+
+    행 잠금(FOR UPDATE) + 유저쌍 advisory lock으로 이중지급/복제를 차단하고,
+    수량 감소·삭제와 상대측 upsert를 한 트랜잭션에서 끝낸다.
+    """
+    if initiator_id == partner_id:
+        raise TradeConflict("cannot trade with yourself")
+    pair_key = f"renaiss-trade:{min(initiator_id, partner_id)}:{max(initiator_id, partner_id)}"
+    pool = await get_db()
+    async with pool.acquire() as conn, conn.transaction():
+        await conn.fetchval(
+            "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", pair_key
+        )
+        sides = []
+        for owner_id, card_id in (
+            (initiator_id, initiator_card_id),
+            (partner_id, partner_card_id),
+        ):
+            row = await conn.fetchrow(
+                """
+                SELECT user_id, category, local_card_id, card_name, grade, set_code,
+                       collector_number, image_url, market_price_usd, quantity
+                FROM renaiss_user_cards
+                WHERE user_id = $1 AND local_card_id = $2
+                FOR UPDATE
+                """,
+                owner_id,
+                card_id,
+            )
+            if row is None or int(row["quantity"] or 0) < 1:
+                raise TradeConflict("a card in this trade is no longer owned")
+            sides.append(dict(row))
+        for side in sides:
+            if int(side["quantity"]) > 1:
+                await conn.execute(
+                    """
+                    UPDATE renaiss_user_cards SET quantity = quantity - 1
+                    WHERE user_id = $1 AND category = $2 AND local_card_id = $3
+                    """,
+                    side["user_id"], side["category"], side["local_card_id"],
+                )
+            else:
+                await conn.execute(
+                    """
+                    DELETE FROM renaiss_user_cards
+                    WHERE user_id = $1 AND category = $2 AND local_card_id = $3
+                    """,
+                    side["user_id"], side["category"], side["local_card_id"],
+                )
+        for receiver_id, source in ((initiator_id, sides[1]), (partner_id, sides[0])):
+            await conn.execute(
+                """
+                INSERT INTO renaiss_user_cards (
+                    user_id, category, local_card_id, card_name, grade, set_code,
+                    collector_number, image_url, market_price_usd, quantity
+                ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,1)
+                ON CONFLICT (user_id, category, local_card_id)
+                DO UPDATE SET
+                    quantity = renaiss_user_cards.quantity + 1,
+                    market_price_usd = COALESCE(
+                        EXCLUDED.market_price_usd, renaiss_user_cards.market_price_usd
+                    )
+                """,
+                receiver_id, source["category"], source["local_card_id"],
+                source["card_name"], source["grade"], source["set_code"],
+                source["collector_number"], source["image_url"],
+                source["market_price_usd"],
+            )
+    return {"initiator_gave": sides[0], "partner_gave": sides[1]}
+

@@ -26,6 +26,7 @@ from renaiss_bot.handlers.spawn_admin import (
     spawn_on_handler,
 )
 from renaiss_bot.handlers.start import cmd_sets, cmd_start
+from renaiss_bot.handlers.trade import on_trade_callback, trade_offer_handler
 
 
 def register_handlers(app: Application) -> None:
@@ -43,6 +44,13 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("spawnon", spawn_on_handler))
     app.add_handler(CommandHandler("spawnoff", spawn_off_handler))
     app.add_handler(MessageHandler(filters.Regex(r"^(?i:force)$"), force_spawn_handler))
+    # P2P 카드 교환: 상대 메시지에 답장으로 `trade <카드명>`
+    app.add_handler(
+        MessageHandler(
+            filters.ChatType.GROUPS & filters.Regex(r"^(?i:trade)(\s+.+)?$"),
+            trade_offer_handler,
+        )
+    )
 
     # 시즌1식 스폰 잡기: 'c' 한 글자로 진행 중인 스폰 포획
     app.add_handler(MessageHandler(filters.Regex(r"^[cC]$"), catch_handler))
@@ -50,7 +58,12 @@ def register_handlers(app: Application) -> None:
     app.add_handler(
         MessageHandler(
             filters.ChatType.GROUPS
-            & (filters.COMMAND | filters.Regex(r"^[cC]$") | filters.Regex(r"^(?i:force)$")),
+            & (
+                filters.COMMAND
+                | filters.Regex(r"^[cC]$")
+                | filters.Regex(r"^(?i:force)$")
+                | filters.Regex(r"^(?i:trade)(\s+.+)?$")
+            ),
             schedule_group_command_delete,
         ),
         group=1,
@@ -59,4 +72,5 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CallbackQueryHandler(on_market, pattern=r"^renaiss:market(?::|$)"))
     app.add_handler(CallbackQueryHandler(on_spawn_guess, pattern=r"^renaiss:spawn_guess:"))
     app.add_handler(CallbackQueryHandler(on_flex_props, pattern=r"^renaiss:props:"))
+    app.add_handler(CallbackQueryHandler(on_trade_callback, pattern=r"^renaiss:trade:"))
     app.add_handler(CallbackQueryHandler(on_callback, pattern=r"^renaiss:"))
